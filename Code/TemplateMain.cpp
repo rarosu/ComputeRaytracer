@@ -36,6 +36,14 @@
 #endif
 
 //--------------------------------------------------------------------------------------
+// Structure definitions
+//-------------------------------------------------------------------------------------
+struct sphere {
+	glm::vec4 m_position; // w = radius
+	glm::vec4 m_color;
+};
+
+//--------------------------------------------------------------------------------------
 // Global Variables
 //--------------------------------------------------------------------------------------
 HINSTANCE				g_hInst					= NULL;  
@@ -44,6 +52,8 @@ HWND					g_hWnd					= NULL;
 IDXGISwapChain*         g_SwapChain				= NULL;
 ID3D11Device*			g_Device				= NULL;
 ID3D11DeviceContext*	g_DeviceContext			= NULL;
+
+ComputeBuffer* g_sphere_buffer = NULL;
 
 ID3D11UnorderedAccessView*  g_BackBufferUAV		= NULL;  // compute output
 
@@ -172,6 +182,16 @@ HRESULT Init()
 	g_Timer = new D3D11Timer(g_Device, g_DeviceContext);
 
 
+
+	// create sphere buffer
+	std::vector<sphere> spheres(1);
+	spheres[0].m_position = glm::vec4(0.0f, 0.0f, 0.0f, 0.3f);
+	spheres[0].m_color = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
+
+	g_sphere_buffer = g_ComputeSys->CreateBuffer(STRUCTURED_BUFFER, sizeof(sphere), 1, true, true, &spheres[0], false, "Spheres");
+
+
+
 	return S_OK;
 }
 
@@ -183,8 +203,8 @@ HRESULT Update(float deltaTime)
 
 HRESULT Render(float deltaTime)
 {
-	ID3D11UnorderedAccessView* uav[] = { g_BackBufferUAV };
-	g_DeviceContext->CSSetUnorderedAccessViews(0, 1, uav, NULL);
+	ID3D11UnorderedAccessView* uav[] = { g_BackBufferUAV, g_sphere_buffer->GetUnorderedAccessView() };
+	g_DeviceContext->CSSetUnorderedAccessViews(0, 2, uav, NULL);
 
 	g_ComputeShader->Set();
 	g_Timer->Start();

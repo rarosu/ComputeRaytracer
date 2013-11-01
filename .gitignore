@@ -1,4 +1,5 @@
-Bin
+Bin/x64/
+Bin/x86/
 Obj
 *.sdf
 *.opensdf
