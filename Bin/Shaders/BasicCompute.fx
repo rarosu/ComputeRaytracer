@@ -57,10 +57,11 @@ void main( uint3 threadID : SV_DispatchThreadID )
 	
 	hit_data closest_hit;
 	closest_hit.m_t = 999999.9f;
-	closest_hit.m_color = float4(0.0f, 0.0f, 0.0f, 0.0f);
+	closest_hit.m_color = float4(0.0f, 1.0f, 0.0f, 0.0f);
 
 	for (int i = 0; i < num_spheres; ++i) {
 		hit_data current_hit = ray_vs_sphere(l_ray, g_spheres[i]);
+
 		if (current_hit.m_t >= 0.0f && current_hit.m_t < closest_hit.m_t)
 			closest_hit = current_hit;
 	}

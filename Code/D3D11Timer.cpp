@@ -17,8 +17,8 @@ D3D11Timer::D3D11Timer(ID3D11Device* d3dDevice, ID3D11DeviceContext* d3dDeviceCo
 D3D11Timer::~D3D11Timer()
 {
 	if(mStart)		mStart->Release();
-	if(mStop)		mStart->Release();
-	if(mDisjoint)	mStart->Release();
+	if(mStop)		mStop->Release();
+	if(mDisjoint)	mDisjoint->Release();
 }
 
 void D3D11Timer::Start()

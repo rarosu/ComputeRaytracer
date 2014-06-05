@@ -203,11 +203,13 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Camera.cpp" />
     <ClCompile Include="ComputeHelp.cpp" />
     <ClCompile Include="D3D11Timer.cpp" />
     <ClCompile Include="TemplateMain.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Camera.h" />
     <ClInclude Include="ComputeHelp.h" />
     <ClInclude Include="D3D11Timer.h" />
     <ClInclude Include="input_state.h" />

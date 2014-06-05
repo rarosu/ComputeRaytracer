@@ -10,6 +10,7 @@
 #include "ComputeHelp.h"
 #include "D3D11Timer.h"
 #include "input_state.h"
+#include "Camera.h"
 
 /*	DirectXTex library - for usage info, see http://directxtex.codeplex.com/
 	
@@ -53,8 +54,6 @@ IDXGISwapChain*         g_SwapChain				= NULL;
 ID3D11Device*			g_Device				= NULL;
 ID3D11DeviceContext*	g_DeviceContext			= NULL;
 
-ComputeBuffer* g_sphere_buffer = NULL;
-
 ID3D11UnorderedAccessView*  g_BackBufferUAV		= NULL;  // compute output
 
 ComputeWrap*			g_ComputeSys			= NULL;
@@ -64,7 +63,24 @@ D3D11Timer*				g_Timer					= NULL;
 
 int g_Width, g_Height;
 
+//--------------------------------------------------------------------------------------
+// DEMO SPECIFIC GLOBALS!
+//--------------------------------------------------------------------------------------
+struct CameraCB
+{
+	glm::mat4 c_view;
+	glm::mat4 c_projection;
+	glm::mat4 c_inv_vp;
+};
+
 input_state g_current_input, g_previous_input;
+Camera* g_camera = NULL;
+
+CameraCB* g_cameraBufferData = NULL;
+std::vector<sphere> g_spheres;
+
+ID3D11Buffer* g_cameraBuffer = NULL;
+ComputeBuffer* g_sphere_buffer = NULL;
 
 //--------------------------------------------------------------------------------------
 // Forward declarations
@@ -73,6 +89,7 @@ HRESULT             InitWindow( HINSTANCE hInstance, int nCmdShow );
 LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
 HRESULT				Render(float deltaTime);
 HRESULT				Update(float deltaTime);
+HRESULT				UpdateBuffer(ID3D11Buffer* p_buffer, void* p_data, unsigned int p_size);
 
 char* FeatureLevelToString(D3D_FEATURE_LEVEL featureLevel)
 {
@@ -182,15 +199,26 @@ HRESULT Init()
 	g_Timer = new D3D11Timer(g_Device, g_DeviceContext);
 
 
+	//--------------------------------------------------------------------------------------
+	// DEMO SPECIFIC INITIALIZATION
+	//--------------------------------------------------------------------------------------
 
-	// create sphere buffer
-	std::vector<sphere> spheres(1);
-	spheres[0].m_position = glm::vec4(0.0f, 0.0f, 0.0f, 0.3f);
-	spheres[0].m_color = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
+	// Setup the scene data.
+	g_spheres.resize(1);
+	g_spheres[0].m_position = glm::vec4(0.0f, 0.0f, -10.0f, 3.3f);
+	g_spheres[0].m_color = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
 
-	g_sphere_buffer = g_ComputeSys->CreateBuffer(STRUCTURED_BUFFER, sizeof(sphere), 1, true, true, &spheres[0], false, "Spheres");
+	// Create a camera.
+	g_camera = new Camera(Camera::CreatePerspectiveProjection(1.0f, 1000.0f, 45.0f, 1.0f));
+	g_cameraBufferData = new CameraCB;
+	g_cameraBufferData->c_view = g_camera->GetView();
+	g_cameraBufferData->c_projection = g_camera->GetProjection();
+	g_cameraBufferData->c_inv_vp = g_camera->GetInverseViewProjection();
 
-
+	// Create the buffers.
+	g_cameraBuffer = g_ComputeSys->CreateConstantBuffer(sizeof(CameraCB), (void*)g_cameraBufferData, "Camera Buffer");
+	g_sphere_buffer = g_ComputeSys->CreateBuffer(STRUCTURED_BUFFER, sizeof(sphere), 1, true, true, &g_spheres[0], false, "Spheres");
+	
 
 	return S_OK;
 }
@@ -205,6 +233,7 @@ HRESULT Render(float deltaTime)
 {
 	ID3D11UnorderedAccessView* uav[] = { g_BackBufferUAV, g_sphere_buffer->GetUnorderedAccessView() };
 	g_DeviceContext->CSSetUnorderedAccessViews(0, 2, uav, NULL);
+	g_DeviceContext->CSSetConstantBuffers(0, 1, &g_cameraBuffer);
 
 	g_ComputeShader->Set();
 	g_Timer->Start();
@@ -367,4 +396,22 @@ LRESULT CALLBACK WndProc( HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam 
 	}
 
 	return 0;
+}
+
+HRESULT UpdateBuffer( ID3D11Buffer* p_buffer, void* p_data, unsigned int p_size )
+{
+	HRESULT result = S_OK;
+
+	D3D11_MAPPED_SUBRESOURCE map;
+	result = g_DeviceContext->Map(p_buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &map);
+	if (SUCCEEDED(result))
+	{
+		memcpy(map.pData, p_data, p_size);
+		map.RowPitch = 0;
+		map.DepthPitch = 0;
+
+		g_DeviceContext->Unmap(p_buffer, 0);
+	}
+	
+	return result;
 }
