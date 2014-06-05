@@ -67,7 +67,7 @@ bool ComputeShader::Init(TCHAR* shaderFile, TCHAR* blobFileAppendix, char* pFunc
 		//hr = D3DX11CompileFromFile(shaderFile, pDefines, nullptr, pFunctionName, "cs_5_0", 
 			//dwShaderFlags, nullptr, nullptr, &pCompiledShader, &pErrorBlob, nullptr);
 
-		hr = D3DCompileFromFile(shaderFile, pDefines, nullptr, pFunctionName, "cs_5_0", 
+		hr = D3DCompileFromFile(shaderFile, pDefines, D3D_COMPILE_STANDARD_FILE_INCLUDE, pFunctionName, "cs_5_0", 
 			dwShaderFlags, NULL, &pCompiledShader, &pErrorBlob);
 
 		if(hr == S_OK)

@@ -45,6 +45,32 @@ struct sphere {
 	glm::vec4 m_color;
 };
 
+struct Tri {
+	glm::vec4 m_corners[3];
+	glm::vec4 m_colors[3];
+};
+
+struct Ray {
+	glm::vec4 m_origin;
+	glm::vec4 m_direction;
+};
+
+const unsigned int PRIMITIVE_TYPE_NONE = 0;
+const unsigned int PRIMITIVE_TYPE_SPHERE = 1;
+const unsigned int PRIMITIVE_TYPE_TRIANGLE = 2;
+
+struct HitData {
+	float m_t;
+	bool m_hit;
+	glm::vec4 m_position;
+	glm::vec4 m_normal;
+	unsigned int m_primitiveType;
+	unsigned int m_primitiveIndex;
+
+	// Triangle specific.
+	glm::vec2 m_barycentricCoords;
+};
+
 //--------------------------------------------------------------------------------------
 // Global Variables
 //--------------------------------------------------------------------------------------
@@ -66,6 +92,11 @@ int g_Width, g_Height;
 //--------------------------------------------------------------------------------------
 // DEMO SPECIFIC GLOBALS!
 //--------------------------------------------------------------------------------------
+const int WIDTH = 800;
+const int HEIGHT = 800;
+const int THREAD_GROUPS_X = 25;
+const int THREAD_GROUPS_Y = 25;
+
 struct CameraCB
 {
 	glm::mat4 c_view;
@@ -73,19 +104,32 @@ struct CameraCB
 	glm::mat4 c_inv_vp;
 };
 
+struct OnceCB
+{
+	int c_windowWidth;
+	int c_windowHeight;
+};
+
 input_state g_current_input, g_previous_input;
 Camera* g_camera = NULL;
 
-ComputeShader* g_CommonShader = NULL;
+std::vector<sphere> g_spheres;
+
 ComputeShader* g_PrimaryShader = NULL;
 ComputeShader* g_IntersectionShader = NULL;
 ComputeShader* g_ColoringShader = NULL;
 
-CameraCB* g_cameraBufferData = NULL;
-std::vector<sphere> g_spheres;
-
-ID3D11Buffer* g_cameraBuffer = NULL;
+ComputeBuffer* g_rayBuffer = NULL;
+ComputeBuffer* g_hitBuffer = NULL;
 ComputeBuffer* g_sphere_buffer = NULL;
+ComputeBuffer* g_triangleBuffer = NULL;
+
+CameraCB* g_cameraBufferData = NULL;
+ID3D11Buffer* g_cameraBuffer = NULL;
+
+OnceCB* g_onceBufferData = NULL;
+ID3D11Buffer* g_onceBuffer = NULL;
+
 
 std::ofstream g_log;
 
@@ -228,10 +272,14 @@ HRESULT Init()
 	SetCursorPos(center.x, center.y);
 
 	// Setup the shaders.
-	g_CommonShader = g_ComputeSys->CreateComputeShader(_T("../Shaders/Common.fx"), NULL, "main", NULL);
 	g_PrimaryShader = g_ComputeSys->CreateComputeShader(_T("../Shaders/Primary.fx"), NULL, "main", NULL);
 	g_IntersectionShader = g_ComputeSys->CreateComputeShader(_T("../Shaders/Intersection.fx"), NULL, "main", NULL);
 	g_ColoringShader = g_ComputeSys->CreateComputeShader(_T("../Shaders/Coloring.fx"), NULL, "main", NULL);
+
+	// Setup persistent data.
+	g_onceBufferData = new OnceCB;
+	g_onceBufferData->c_windowWidth = g_Width;
+	g_onceBufferData->c_windowHeight = g_Height;
 
 	// Setup the scene data.
 	g_spheres.resize(2);
@@ -249,7 +297,12 @@ HRESULT Init()
 
 	// Create the buffers.
 	g_cameraBuffer = g_ComputeSys->CreateDynamicBuffer(sizeof(CameraCB), (void*)g_cameraBufferData, "Camera Buffer");
+	g_onceBuffer = g_ComputeSys->CreateDynamicBuffer(sizeof(OnceCB), (void*)g_onceBufferData, "Once Buffer");
+	g_rayBuffer = g_ComputeSys->CreateBuffer(STRUCTURED_BUFFER, sizeof(Ray), (UINT) WIDTH * HEIGHT, true, true, 0, false, "Ray Buffer");
+	g_hitBuffer = g_ComputeSys->CreateBuffer(STRUCTURED_BUFFER, sizeof(HitData), (UINT) WIDTH * HEIGHT, true, true, 0, false, "Hit Buffer");
 	g_sphere_buffer = g_ComputeSys->CreateBuffer(STRUCTURED_BUFFER, sizeof(sphere), (UINT)g_spheres.size(), true, true, &g_spheres[0], false, "Spheres");
+	//g_triangleBuffer = g_ComputeSys->CreateBuffer(STRUCTURED_BUFFER, sizeof(sphere), (UINT)g_spheres.size(), true, true, &g_spheres[0], false, "Spheres");
+	
 	
 
 	return S_OK;
@@ -257,6 +310,7 @@ HRESULT Init()
 
 HRESULT Update(float deltaTime)
 {
+	// Handle camera controls
 	POINT center;
 	center.x = (LONG) (g_Width * 0.5f);
 	center.y = (LONG) (g_Height * 0.5f);
@@ -264,7 +318,6 @@ HRESULT Update(float deltaTime)
 	POINT pos;
 	GetCursorPos(&pos);
 	ScreenToClient(g_hWnd, &pos);
-
 
 	float sensitivity = 0.05f;
 	float speed = 20.0f;
@@ -286,7 +339,6 @@ HRESULT Update(float deltaTime)
 	const glm::vec3& position = g_camera->GetPosition();
 	const glm::vec3& facing = g_camera->GetFacing();
 	glm::vec3 right = g_camera->GetRight();
-	g_log << "Position (" << position.x << ", " << position.y << ", " << position.z << ") Facing (" << facing.x << ", " << facing.y << ", " << facing.z << ") dt = " << deltaTime << " Right (" << right.x << ", " << right.y << ", " << right.z << ")" << std::endl;
 
 	g_camera->Commit();
 
@@ -303,23 +355,63 @@ HRESULT Update(float deltaTime)
 
 HRESULT Render(float deltaTime)
 {
-	ID3D11UnorderedAccessView* uav[] = { g_BackBufferUAV, g_sphere_buffer->GetUnorderedAccessView() };
-	g_DeviceContext->CSSetUnorderedAccessViews(0, 2, uav, NULL);
+	double primaryTime = 0.0f;
+	double intersectionTime = 0.0f;
+	double coloringTime = 0.0f;
+
+	ID3D11UnorderedAccessView* uavClear[] = { NULL, NULL, NULL, NULL, NULL, NULL };
+	ID3D11UnorderedAccessView* uavPrimary[] = { g_rayBuffer->GetUnorderedAccessView() };
+	ID3D11UnorderedAccessView* uavIntersection[] = { g_rayBuffer->GetUnorderedAccessView(), g_hitBuffer->GetUnorderedAccessView(), g_sphere_buffer->GetUnorderedAccessView(), NULL };
+	ID3D11UnorderedAccessView* uavColoring[] = { g_BackBufferUAV, g_hitBuffer->GetUnorderedAccessView(), g_sphere_buffer->GetUnorderedAccessView(), NULL };
+	
 	g_DeviceContext->CSSetConstantBuffers(0, 1, &g_cameraBuffer);
+	g_DeviceContext->CSSetConstantBuffers(1, 1, &g_onceBuffer);
+
+
 
 	// Primary Ray Stage
-	g_ComputeShader->Set();
+	g_DeviceContext->CSSetUnorderedAccessViews(0, 1, uavPrimary, NULL);
+	
+	g_PrimaryShader->Set();
 	g_Timer->Start();
-	g_DeviceContext->Dispatch( 25, 25, 1 );
+	g_DeviceContext->Dispatch(THREAD_GROUPS_X, THREAD_GROUPS_Y, 1);
 	g_Timer->Stop();
-	g_ComputeShader->Unset();
+	g_PrimaryShader->Unset();
+	primaryTime = g_Timer->GetTime();
+
+	g_DeviceContext->CSSetUnorderedAccessViews(0, 1, uavClear, NULL);
+
+
+
+	// Intersection stage
+	g_DeviceContext->CSSetUnorderedAccessViews(0, 4, uavIntersection, NULL);
+
+	g_IntersectionShader->Set();
+	g_Timer->Start();
+	g_DeviceContext->Dispatch(THREAD_GROUPS_X, THREAD_GROUPS_Y, 1);
+	g_Timer->Stop();
+	g_IntersectionShader->Unset();
+	intersectionTime = g_Timer->GetTime();
+
+	g_DeviceContext->CSSetUnorderedAccessViews(0, 4, uavClear, NULL);
+
+	// Coloring stage
+	g_DeviceContext->CSSetUnorderedAccessViews(0, 4, uavColoring, NULL);
+
+	g_ColoringShader->Set();
+	g_Timer->Start();
+	g_DeviceContext->Dispatch(THREAD_GROUPS_X, THREAD_GROUPS_Y, 1);
+	g_Timer->Stop();
+	g_ColoringShader->Unset();
+	coloringTime = g_Timer->GetTime();
+
+	g_DeviceContext->CSSetUnorderedAccessViews(0, 4, uavClear, NULL);
+
+
 
 	// Presentation! :D
 	if(FAILED(g_SwapChain->Present( 0, 0 )))
 		return E_FAIL;
-
-	ID3D11Buffer* cbClear[] = { NULL };
-	g_DeviceContext->CSSetConstantBuffers(0, 1, cbClear);
 
 
 	char title[256];
@@ -327,7 +419,7 @@ HRESULT Render(float deltaTime)
 		title,
 		sizeof(title),
 		"BTH - DirectCompute DEMO - Dispatch time: %f",
-		g_Timer->GetTime()
+		(primaryTime + intersectionTime + coloringTime)
 	);
 	SetWindowTextA(g_hWnd, title);
 
@@ -405,7 +497,7 @@ HRESULT InitWindow( HINSTANCE hInstance, int nCmdShow )
 
 	// Create window
 	g_hInst = hInstance; 
-	RECT rc = { 0, 0, 800, 800 };
+	RECT rc = { 0, 0, WIDTH, HEIGHT };
 	AdjustWindowRect( &rc, WS_OVERLAPPEDWINDOW, FALSE );
 	
 	if(!(g_hWnd = CreateWindow(

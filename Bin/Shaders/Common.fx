@@ -14,8 +14,9 @@ struct Ray {
 	float4 m_direction;
 };
 
-const int PRIMITIVE_TYPE_SPHERE = 1;
-const int PRIMITIVE_TYPE_TRIANGLE = 2;
+static const uint PRIMITIVE_TYPE_NONE = 0;
+static const uint PRIMITIVE_TYPE_SPHERE = 1;
+static const uint PRIMITIVE_TYPE_TRIANGLE = 2;
 
 /**
 	Information about a ray intersection.
@@ -24,6 +25,7 @@ const int PRIMITIVE_TYPE_TRIANGLE = 2;
 */
 struct HitData {
 	float m_t;
+	bool m_hit;
 	float4 m_position;
 	float4 m_normal;
 	uint m_primitiveType;
