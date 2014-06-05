@@ -216,9 +216,10 @@
     <ClInclude Include="stdafx.h" />
   </ItemGroup>
   <ItemGroup>
-    <FXC Include="..\Bin\Shaders\BasicCompute.fx">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-    </FXC>
+    <FxCompile Include="..\Bin\Shaders\Coloring.fx" />
+    <FxCompile Include="..\Bin\Shaders\Common.fx" />
+    <FxCompile Include="..\Bin\Shaders\Intersection.fx" />
+    <FxCompile Include="..\Bin\Shaders\Primary.fx" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

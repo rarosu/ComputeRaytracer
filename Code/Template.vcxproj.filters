@@ -41,8 +41,17 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <FXC Include="..\Bin\Shaders\BasicCompute.fx">
+    <FxCompile Include="..\Bin\Shaders\Intersection.fx">
       <Filter>Shaders</Filter>
-    </FXC>
+    </FxCompile>
+    <FxCompile Include="..\Bin\Shaders\Primary.fx">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="..\Bin\Shaders\Coloring.fx">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="..\Bin\Shaders\Common.fx">
+      <Filter>Shaders</Filter>
+    </FxCompile>
   </ItemGroup>
 </Project>
