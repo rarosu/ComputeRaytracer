@@ -6,7 +6,7 @@ struct Sphere {
 
 struct Tri {
 	float4 m_corners[3];
-	float4 m_colors[3];
+	float2 m_uv[3];
 };
 
 struct Ray {

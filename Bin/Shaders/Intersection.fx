@@ -1,4 +1,5 @@
 #include "Common.fx"
+#define EPSILON 0.000001
 
 cbuffer per_once : register(b1) {
 	int c_windowWidth;
@@ -11,6 +12,7 @@ RWStructuredBuffer<Sphere> g_spheres : register(u2);
 RWStructuredBuffer<Tri> g_triangles : register(u3);
 
 HitData ray_vs_sphere(Ray _r, Sphere _s);
+HitData ray_vs_triangle(Ray _r, Tri _t);
 
 [numthreads(32, 32, 1)]
 void main( uint3 threadID : SV_DispatchThreadID )
@@ -40,6 +42,7 @@ void main( uint3 threadID : SV_DispatchThreadID )
 	closest_hit.m_primitiveType = PRIMITIVE_TYPE_NONE;
 	closest_hit.m_primitiveIndex = 0;
 
+	//Intersection versus spheres
 	for (uint i = 0; i < num_spheres; ++i) {
 		HitData current_hit = ray_vs_sphere(ray, g_spheres[i]);
 
@@ -49,7 +52,15 @@ void main( uint3 threadID : SV_DispatchThreadID )
 		}
 	}
 
-	// TODO: Intersection versus triangles.
+	//Intersection versus triangles.
+	for (i = 0; i < num_triangles; ++i) {
+		HitData current_hit = ray_vs_triangle(ray, g_triangles[i]);
+
+		if (current_hit.m_hit && current_hit.m_t < closest_hit.m_t) {
+			closest_hit = current_hit;
+			closest_hit.m_primitiveIndex = i;
+		}
+	}
 
 	// Calculate the reflected ray.
 	if (closest_hit.m_hit) {
@@ -90,8 +101,60 @@ HitData ray_vs_sphere(Ray _r, Sphere _s)  {
 
 	result.m_hit = true;
 	result.m_primitiveType = PRIMITIVE_TYPE_SPHERE;
-	result.m_position = _r.m_origin + _r.m_direction * result.m_t;
+	result.m_position = _r.m_origin + _r.m_direction * (result.m_t - EPSILON);
 	result.m_normal = float4(normalize(result.m_position.xyz - _s.m_position.xyz), 0.0f);
+
+	return result;
+}
+
+HitData ray_vs_triangle(Ray _r, Tri _t) {
+	HitData result;
+	result.m_t = -1.0f;
+	result.m_hit = false;
+	result.m_position = float4(0.0f, 0.0f, 0.0f, 0.0f);
+	result.m_normal = float4(0.0f, 0.0f, 0.0f, 0.0f);
+	result.m_primitiveType = PRIMITIVE_TYPE_NONE;
+	result.m_primitiveIndex = 0;
+	result.m_barycentricCoords = float2(0.0f, 0.0f);
+
+	float3 e1 = _t.m_corners[1].xyz - _t.m_corners[0].xyz;
+	float3 e2 = _t.m_corners[2].xyz - _t.m_corners[0].xyz;
+
+	float3 P = cross(_r.m_direction.xyz, e2);
+	float det = dot(e1, P);
+
+	//NOT CULLING
+	if(det > -EPSILON && det < EPSILON)
+		return result;
+
+	float inv_det = 1.0f / det;
+
+	float3 T = _r.m_origin.xyz - _t.m_corners[0].xyz;
+	float u = dot(T, P) * inv_det;
+
+	// The intersection lies outside of the triangle
+	if (u < 0.0f || u > 1.0f)
+		return result;
+
+	float3 Q = cross(T, e1);
+
+	float v = dot(_r.m_direction.xyz, Q) * inv_det;
+
+	// The intersection lies outside of the triangle
+	if (v < 0.0f || u + v > 1.0f)
+		return result;
+
+	float t = dot(e2, Q) * inv_det;
+
+	if (t <= EPSILON)
+		return result;
+
+	result.m_t = t;
+	result.m_hit = true;
+	result.m_position = _r.m_origin + (t - EPSILON) * _r.m_direction;
+	result.m_normal = float4(cross(e1, e2), 0.0f);
+	result.m_primitiveType = PRIMITIVE_TYPE_TRIANGLE;
+	result.m_barycentricCoords = float2(u, v);
 
 	return result;
 }

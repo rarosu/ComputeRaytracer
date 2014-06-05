@@ -1,6 +1,8 @@
 #include "Camera.h"
 #include "glm/gtx/transform.hpp"
 
+const glm::vec3 Camera::UP(0.0f, -1.0f, 0.0f);
+
 Camera::Camera( const glm::mat4& p_projection )
 	: m_projection(p_projection)
 	, m_facing(0, 0, 1)
@@ -27,16 +29,14 @@ void Camera::LookAt( const glm::vec3& p_position )
 
 void Camera::Yaw( float p_angle )
 {
-	glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
-
 	glm::mat4 m;
-	m = glm::rotate(m, p_angle, up);
+	m = glm::rotate(m, p_angle, UP);
 	m_facing = glm::normalize(glm::vec3(m * glm::vec4(m_facing, 0.0f)));
 }
 
 void Camera::Pitch( float p_angle )
 {
-	glm::vec3 right = glm::cross(m_facing, glm::vec3(0.0f, 1.0f, 0.0f));
+	glm::vec3 right = glm::cross(m_facing, UP);
 
 	glm::mat4 m;
 	m = glm::rotate(m, p_angle, right);
@@ -48,7 +48,7 @@ void Camera::Pitch( float p_angle )
 void Camera::Commit()
 {
 	// TODO: Maybe transpose
-	m_view = glm::transpose(glm::lookAt(m_position, m_position + m_facing, glm::vec3(0, 1, 0)));
+	m_view = glm::transpose(glm::lookAt(m_position, m_position + m_facing, UP));
 
 	m_viewProjection = m_view * m_projection;
 	m_inverseViewProjection = glm::inverse(m_viewProjection);
@@ -66,7 +66,7 @@ const glm::vec3& Camera::GetFacing() const
 
 glm::vec3 Camera::GetRight() const
 {
-	return glm::cross(m_facing, glm::vec3(0.0f, 1.0f, 0.0f));
+	return glm::cross(m_facing, UP);
 }
 
 const glm::mat4& Camera::GetView() const

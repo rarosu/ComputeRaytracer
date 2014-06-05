@@ -25,6 +25,8 @@ public:
 
 	static glm::mat4 CreatePerspectiveProjection(float p_near, float p_far, float p_fovY, float p_aspect);
 private:
+	static const glm::vec3 UP;
+
 	glm::vec3 m_position;
 	glm::vec3 m_facing;
 

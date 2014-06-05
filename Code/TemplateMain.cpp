@@ -47,7 +47,7 @@ struct sphere {
 
 struct Tri {
 	glm::vec4 m_corners[3];
-	glm::vec4 m_colors[3];
+	glm::vec2 m_uv[3];
 };
 
 struct Ray {
@@ -114,6 +114,7 @@ input_state g_current_input, g_previous_input;
 Camera* g_camera = NULL;
 
 std::vector<sphere> g_spheres;
+std::vector<Tri> g_triangles;
 
 ComputeShader* g_PrimaryShader = NULL;
 ComputeShader* g_IntersectionShader = NULL;
@@ -283,10 +284,18 @@ HRESULT Init()
 
 	// Setup the scene data.
 	g_spheres.resize(2);
-	g_spheres[0].m_position = glm::vec4(0.0f, 0.0f, 10.0f, 3.3f);
+	g_spheres[0].m_position = glm::vec4(0.0f, -5.0f, 10.0f, 3.3f);
 	g_spheres[0].m_color = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
 	g_spheres[1].m_position = glm::vec4(0.0f, 0.0f, 5.0f, 1.3f);
 	g_spheres[1].m_color = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
+
+	g_triangles.resize(1);
+	g_triangles[0].m_corners[0] = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+	g_triangles[0].m_corners[1] = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
+	g_triangles[0].m_corners[2] = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
+	g_triangles[0].m_uv[0] = glm::vec2(0.0f, 1.0f);
+	g_triangles[0].m_uv[1] = glm::vec2(1.0f, 1.0f);
+	g_triangles[0].m_uv[2] = glm::vec2(0.0f, 0.0f);
 
 	// Create a camera.
 	g_camera = new Camera(Camera::CreatePerspectiveProjection(1.0f, 1000.0f, 45.0f, 1.0f));
@@ -301,7 +310,7 @@ HRESULT Init()
 	g_rayBuffer = g_ComputeSys->CreateBuffer(STRUCTURED_BUFFER, sizeof(Ray), (UINT) WIDTH * HEIGHT, true, true, 0, false, "Ray Buffer");
 	g_hitBuffer = g_ComputeSys->CreateBuffer(STRUCTURED_BUFFER, sizeof(HitData), (UINT) WIDTH * HEIGHT, true, true, 0, false, "Hit Buffer");
 	g_sphere_buffer = g_ComputeSys->CreateBuffer(STRUCTURED_BUFFER, sizeof(sphere), (UINT)g_spheres.size(), true, true, &g_spheres[0], false, "Spheres");
-	//g_triangleBuffer = g_ComputeSys->CreateBuffer(STRUCTURED_BUFFER, sizeof(sphere), (UINT)g_spheres.size(), true, true, &g_spheres[0], false, "Spheres");
+	g_triangleBuffer = g_ComputeSys->CreateBuffer(STRUCTURED_BUFFER, sizeof(Tri), (UINT)g_triangles.size(), true, true, &g_triangles[0], false, "Triangles");
 	
 	
 
@@ -361,8 +370,8 @@ HRESULT Render(float deltaTime)
 
 	ID3D11UnorderedAccessView* uavClear[] = { NULL, NULL, NULL, NULL, NULL, NULL };
 	ID3D11UnorderedAccessView* uavPrimary[] = { g_rayBuffer->GetUnorderedAccessView() };
-	ID3D11UnorderedAccessView* uavIntersection[] = { g_rayBuffer->GetUnorderedAccessView(), g_hitBuffer->GetUnorderedAccessView(), g_sphere_buffer->GetUnorderedAccessView(), NULL };
-	ID3D11UnorderedAccessView* uavColoring[] = { g_BackBufferUAV, g_hitBuffer->GetUnorderedAccessView(), g_sphere_buffer->GetUnorderedAccessView(), NULL };
+	ID3D11UnorderedAccessView* uavIntersection[] = { g_rayBuffer->GetUnorderedAccessView(), g_hitBuffer->GetUnorderedAccessView(), g_sphere_buffer->GetUnorderedAccessView(), g_triangleBuffer->GetUnorderedAccessView() };
+	ID3D11UnorderedAccessView* uavColoring[] = { g_BackBufferUAV, g_hitBuffer->GetUnorderedAccessView(), g_sphere_buffer->GetUnorderedAccessView(), g_triangleBuffer->GetUnorderedAccessView() };
 	
 	g_DeviceContext->CSSetConstantBuffers(0, 1, &g_cameraBuffer);
 	g_DeviceContext->CSSetConstantBuffers(1, 1, &g_onceBuffer);
