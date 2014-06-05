@@ -178,6 +178,7 @@ public:
 	ComputeShader* CreateComputeShader(TCHAR* shaderFile, TCHAR* blobFileAppendix, char* pFunctionName, D3D10_SHADER_MACRO* pDefines);
 
 	ID3D11Buffer* CreateConstantBuffer(UINT uSize, VOID* pInitData, char* debugName = nullptr);
+	ID3D11Buffer* CreateDynamicBuffer(UINT uSize, VOID* pInitData, char* debugName = nullptr);
 
 	ComputeBuffer* CreateBuffer(COMPUTE_BUFFER_TYPE uType, UINT uElementSize,
 		UINT uCount, bool bSRV, bool bUAV, VOID* pInitData, bool bCreateStaging = false, char* debugName = nullptr);

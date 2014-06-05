@@ -7,6 +7,7 @@
 //--------------------------------------------------------------------------------------
 #include "stdafx.h"
 
+#include <fstream>
 #include "ComputeHelp.h"
 #include "D3D11Timer.h"
 #include "input_state.h"
@@ -81,6 +82,8 @@ std::vector<sphere> g_spheres;
 
 ID3D11Buffer* g_cameraBuffer = NULL;
 ComputeBuffer* g_sphere_buffer = NULL;
+
+std::ofstream g_log;
 
 //--------------------------------------------------------------------------------------
 // Forward declarations
@@ -203,10 +206,30 @@ HRESULT Init()
 	// DEMO SPECIFIC INITIALIZATION
 	//--------------------------------------------------------------------------------------
 
+	// Open log file.
+	g_log.open("log.txt", std::ios_base::trunc | std::ios_base::out);
+	if (!g_log.is_open())
+	{
+		throw "Failed to open log file";
+	}
+
+	// Initialize input structs.
+	memset(&g_current_input, 0, sizeof(input_state));
+	memset(&g_previous_input, 0, sizeof(input_state));
+
+	// Set mouse to center.
+	POINT center;
+	center.x = (LONG) (g_Width * 0.5f);
+	center.y = (LONG) (g_Height * 0.5f);
+	ClientToScreen(g_hWnd, &center);
+	SetCursorPos(center.x, center.y);
+
 	// Setup the scene data.
-	g_spheres.resize(1);
-	g_spheres[0].m_position = glm::vec4(0.0f, 0.0f, -10.0f, 3.3f);
+	g_spheres.resize(2);
+	g_spheres[0].m_position = glm::vec4(0.0f, 0.0f, 10.0f, 3.3f);
 	g_spheres[0].m_color = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
+	g_spheres[1].m_position = glm::vec4(0.0f, 0.0f, 5.0f, 1.3f);
+	g_spheres[1].m_color = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
 
 	// Create a camera.
 	g_camera = new Camera(Camera::CreatePerspectiveProjection(1.0f, 1000.0f, 45.0f, 1.0f));
@@ -216,8 +239,8 @@ HRESULT Init()
 	g_cameraBufferData->c_inv_vp = g_camera->GetInverseViewProjection();
 
 	// Create the buffers.
-	g_cameraBuffer = g_ComputeSys->CreateConstantBuffer(sizeof(CameraCB), (void*)g_cameraBufferData, "Camera Buffer");
-	g_sphere_buffer = g_ComputeSys->CreateBuffer(STRUCTURED_BUFFER, sizeof(sphere), 1, true, true, &g_spheres[0], false, "Spheres");
+	g_cameraBuffer = g_ComputeSys->CreateDynamicBuffer(sizeof(CameraCB), (void*)g_cameraBufferData, "Camera Buffer");
+	g_sphere_buffer = g_ComputeSys->CreateBuffer(STRUCTURED_BUFFER, sizeof(sphere), (UINT)g_spheres.size(), true, true, &g_spheres[0], false, "Spheres");
 	
 
 	return S_OK;
@@ -225,7 +248,47 @@ HRESULT Init()
 
 HRESULT Update(float deltaTime)
 {
+	POINT center;
+	center.x = (LONG) (g_Width * 0.5f);
+	center.y = (LONG) (g_Height * 0.5f);
+
+	POINT pos;
+	GetCursorPos(&pos);
+	ScreenToClient(g_hWnd, &pos);
+
+
+	float sensitivity = 0.05f;
+	float speed = 20.0f;
+	float dx = (float)(center.x - pos.x);
+	float dy = -(float)(center.y - pos.y);
 	
+	g_camera->Yaw(dx * sensitivity);
+	g_camera->Pitch(dy * sensitivity);
+
+	if (g_current_input.m_keyboard.m_keys['W'])
+		g_camera->SetPosition(g_camera->GetPosition() + g_camera->GetFacing() * speed * deltaTime);
+	if (g_current_input.m_keyboard.m_keys['S'])
+		g_camera->SetPosition(g_camera->GetPosition() - g_camera->GetFacing() * speed * deltaTime);
+	if (g_current_input.m_keyboard.m_keys['A'])
+		g_camera->SetPosition(g_camera->GetPosition() - g_camera->GetRight() * speed * deltaTime);
+	if (g_current_input.m_keyboard.m_keys['D'])
+		g_camera->SetPosition(g_camera->GetPosition() + g_camera->GetRight() * speed * deltaTime);
+
+	const glm::vec3& position = g_camera->GetPosition();
+	const glm::vec3& facing = g_camera->GetFacing();
+	glm::vec3 right = g_camera->GetRight();
+	g_log << "Position (" << position.x << ", " << position.y << ", " << position.z << ") Facing (" << facing.x << ", " << facing.y << ", " << facing.z << ") dt = " << deltaTime << " Right (" << right.x << ", " << right.y << ", " << right.z << ")" << std::endl;
+
+	g_camera->Commit();
+
+	g_cameraBufferData->c_view = g_camera->GetView();
+	g_cameraBufferData->c_projection = g_camera->GetProjection();
+	g_cameraBufferData->c_inv_vp = g_camera->GetInverseViewProjection();
+	UpdateBuffer(g_cameraBuffer, g_cameraBufferData, sizeof(CameraCB));
+	
+	ClientToScreen(g_hWnd, &center);
+	SetCursorPos(center.x, center.y);
+
 	return S_OK;
 }
 
@@ -235,14 +298,19 @@ HRESULT Render(float deltaTime)
 	g_DeviceContext->CSSetUnorderedAccessViews(0, 2, uav, NULL);
 	g_DeviceContext->CSSetConstantBuffers(0, 1, &g_cameraBuffer);
 
+	// Primary Ray Stage
 	g_ComputeShader->Set();
 	g_Timer->Start();
 	g_DeviceContext->Dispatch( 25, 25, 1 );
 	g_Timer->Stop();
 	g_ComputeShader->Unset();
 
+	// Presentation! :D
 	if(FAILED(g_SwapChain->Present( 0, 0 )))
 		return E_FAIL;
+
+	ID3D11Buffer* cbClear[] = { NULL };
+	g_DeviceContext->CSSetConstantBuffers(0, 1, cbClear);
 
 
 	char title[256];
@@ -318,7 +386,7 @@ HRESULT InitWindow( HINSTANCE hInstance, int nCmdShow )
 	wcex.cbWndExtra     = 0;
 	wcex.hInstance      = hInstance;
 	wcex.hIcon          = 0;
-	wcex.hCursor        = LoadCursor(NULL, IDC_ARROW);
+	wcex.hCursor        = LoadCursor(NULL, IDC_NO);
 	wcex.hbrBackground  = (HBRUSH)(COLOR_WINDOW+1);
 	wcex.lpszMenuName   = NULL;
 	wcex.lpszClassName  = _T("BTH_D3D_Template");
@@ -407,8 +475,6 @@ HRESULT UpdateBuffer( ID3D11Buffer* p_buffer, void* p_data, unsigned int p_size 
 	if (SUCCEEDED(result))
 	{
 		memcpy(map.pData, p_data, p_size);
-		map.RowPitch = 0;
-		map.DepthPitch = 0;
 
 		g_DeviceContext->Unmap(p_buffer, 0);
 	}

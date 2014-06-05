@@ -471,6 +471,40 @@ ID3D11Buffer* ComputeWrap::CreateConstantBuffer(UINT uSize, VOID* pInitData, cha
 	return pBuffer;
 }
 
+ID3D11Buffer* ComputeWrap::CreateDynamicBuffer(UINT uSize, VOID* pInitData, char* debugName)
+{
+	ID3D11Buffer* pBuffer = nullptr;
+
+	// setup creation information
+	D3D11_BUFFER_DESC cbDesc;
+	cbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+
+	bool addMod = uSize % 16 != 0 ? true : false;
+	cbDesc.ByteWidth = uSize + (addMod ? (16 - uSize % 16) : 0);
+	cbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+	cbDesc.MiscFlags = 0;
+	cbDesc.StructureByteStride = 0;
+	cbDesc.Usage = D3D11_USAGE_DYNAMIC;
+
+	if(pInitData)
+	{
+		D3D11_SUBRESOURCE_DATA InitData;
+		InitData.pSysMem = pInitData;
+		mD3DDevice->CreateBuffer(&cbDesc, &InitData, &pBuffer);
+	}
+	else
+	{
+		mD3DDevice->CreateBuffer(&cbDesc, nullptr, &pBuffer);
+	}
+
+	if(debugName && pBuffer)
+	{
+		SetDebugName(pBuffer, debugName);
+	}
+
+	return pBuffer;
+}
+
 void ComputeWrap::SetDebugName(ID3D11DeviceChild* object, char* debugName)
 {
 #if defined( DEBUG ) || defined( _DEBUG )

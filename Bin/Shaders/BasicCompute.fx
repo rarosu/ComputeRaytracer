@@ -26,11 +26,12 @@ struct hit_data {
 	float4 m_color;
 };
 
-cbuffer per_frame : register(b0) {
+cbuffer per_frame : register(c0) {
 	float4x4 c_view;
 	float4x4 c_projection;
 	float4x4 c_inv_vp;
 };
+
 
 hit_data ray_vs_sphere(ray _r, sphere _s);
 
@@ -41,8 +42,12 @@ RWStructuredBuffer<tri> g_triangles : register(u2);
 [numthreads(32, 32, 1)]
 void main( uint3 threadID : SV_DispatchThreadID )
 {
-	const int num_spheres = 1;
-	const int num_triangles = 0;
+	uint garbage = 0;
+	uint num_spheres = 0; 
+	uint num_triangles = 0; 
+
+	g_spheres.GetDimensions(num_spheres, garbage);
+	g_triangles.GetDimensions(num_triangles, garbage);
 	
 	float4 near, far;
 	near = float4((threadID.xy / 799.0f) * 2.0f - 1.0f, 0, 1);
@@ -59,7 +64,7 @@ void main( uint3 threadID : SV_DispatchThreadID )
 	closest_hit.m_t = 999999.9f;
 	closest_hit.m_color = float4(0.0f, 1.0f, 0.0f, 0.0f);
 
-	for (int i = 0; i < num_spheres; ++i) {
+	for (uint i = 0; i < num_spheres; ++i) {
 		hit_data current_hit = ray_vs_sphere(l_ray, g_spheres[i]);
 
 		if (current_hit.m_t >= 0.0f && current_hit.m_t < closest_hit.m_t)

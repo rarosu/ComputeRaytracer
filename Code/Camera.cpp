@@ -16,7 +16,7 @@ void Camera::SetPosition( const glm::vec3& p_position )
 
 void Camera::SetFacing( const glm::vec3& p_facing )
 {
-	m_facing = p_facing;
+	m_facing = glm::normalize(p_facing);
 }
 
 void Camera::LookAt( const glm::vec3& p_position )
@@ -24,13 +24,49 @@ void Camera::LookAt( const glm::vec3& p_position )
 	m_facing = glm::normalize(p_position - m_position);
 }
 
+
+void Camera::Yaw( float p_angle )
+{
+	glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
+
+	glm::mat4 m;
+	m = glm::rotate(m, p_angle, up);
+	m_facing = glm::normalize(glm::vec3(m * glm::vec4(m_facing, 0.0f)));
+}
+
+void Camera::Pitch( float p_angle )
+{
+	glm::vec3 right = glm::cross(m_facing, glm::vec3(0.0f, 1.0f, 0.0f));
+
+	glm::mat4 m;
+	m = glm::rotate(m, p_angle, right);
+	m_facing = glm::normalize(glm::vec3(m * glm::vec4(m_facing, 0.0f)));
+}
+
+
+
 void Camera::Commit()
 {
 	// TODO: Maybe transpose
-	m_view = glm::lookAt(m_position, m_position + m_facing, glm::vec3(0, 1, 0));
+	m_view = glm::transpose(glm::lookAt(m_position, m_position + m_facing, glm::vec3(0, 1, 0)));
 
 	m_viewProjection = m_view * m_projection;
 	m_inverseViewProjection = glm::inverse(m_viewProjection);
+}
+
+const glm::vec3& Camera::GetPosition() const
+{
+	return m_position;
+}
+
+const glm::vec3& Camera::GetFacing() const
+{
+	return m_facing;
+}
+
+glm::vec3 Camera::GetRight() const
+{
+	return glm::cross(m_facing, glm::vec3(0.0f, 1.0f, 0.0f));
 }
 
 const glm::mat4& Camera::GetView() const
@@ -56,7 +92,5 @@ const glm::mat4& Camera::GetInverseViewProjection() const
 glm::mat4 Camera::CreatePerspectiveProjection( float p_near, float p_far, float p_fovY, float p_aspect )
 {
 	// TODO: Maybe transpose
-	return glm::perspectiveFov(p_fovY, p_aspect, 1.0f, p_near, p_far);
+	return glm::transpose(glm::perspectiveFov(p_fovY, p_aspect, 1.0f, p_near, p_far));
 }
-
-
