@@ -58,7 +58,6 @@ ID3D11DeviceContext*	g_DeviceContext			= NULL;
 ID3D11UnorderedAccessView*  g_BackBufferUAV		= NULL;  // compute output
 
 ComputeWrap*			g_ComputeSys			= NULL;
-ComputeShader*			g_ComputeShader			= NULL;
 
 D3D11Timer*				g_Timer					= NULL;
 
@@ -76,6 +75,11 @@ struct CameraCB
 
 input_state g_current_input, g_previous_input;
 Camera* g_camera = NULL;
+
+ComputeShader* g_CommonShader = NULL;
+ComputeShader* g_PrimaryShader = NULL;
+ComputeShader* g_IntersectionShader = NULL;
+ComputeShader* g_ColoringShader = NULL;
 
 CameraCB* g_cameraBufferData = NULL;
 std::vector<sphere> g_spheres;
@@ -198,7 +202,6 @@ HRESULT Init()
 
 	//create helper sys and compute shader instance
 	g_ComputeSys = new ComputeWrap(g_Device, g_DeviceContext);
-	g_ComputeShader = g_ComputeSys->CreateComputeShader(_T("../Shaders/BasicCompute.fx"), NULL, "main", NULL);
 	g_Timer = new D3D11Timer(g_Device, g_DeviceContext);
 
 
@@ -223,6 +226,12 @@ HRESULT Init()
 	center.y = (LONG) (g_Height * 0.5f);
 	ClientToScreen(g_hWnd, &center);
 	SetCursorPos(center.x, center.y);
+
+	// Setup the shaders.
+	g_CommonShader = g_ComputeSys->CreateComputeShader(_T("../Shaders/Common.fx"), NULL, "main", NULL);
+	g_PrimaryShader = g_ComputeSys->CreateComputeShader(_T("../Shaders/Primary.fx"), NULL, "main", NULL);
+	g_IntersectionShader = g_ComputeSys->CreateComputeShader(_T("../Shaders/Intersection.fx"), NULL, "main", NULL);
+	g_ColoringShader = g_ComputeSys->CreateComputeShader(_T("../Shaders/Coloring.fx"), NULL, "main", NULL);
 
 	// Setup the scene data.
 	g_spheres.resize(2);
