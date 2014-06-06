@@ -302,7 +302,7 @@ HRESULT Init()
 
 	// Setup the scene data.
 	g_spheres.resize(2);
-	g_spheres[0].m_position = glm::vec4(0.0f, -5.0f, 10.0f, 3.3f);
+	g_spheres[0].m_position = glm::vec4(0.0f, 0.0f, 10.0f, 3.3f);
 	g_spheres[0].m_diffuse = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
 	g_spheres[0].m_specular = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
 	g_spheres[1].m_position = glm::vec4(0.0f, 0.0f, 5.0f, 1.3f);
@@ -315,8 +315,8 @@ HRESULT Init()
 	LoadModel("../Models/shipB_OBJ.obj", g_triangles, aabb);
 
 	g_pointLights.resize(1);
-	g_pointLights[0].m_position = glm::vec3(0.0f, 5.0f, 7.5f);
-	g_pointLights[0].m_radius = 20.0f;
+	g_pointLights[0].m_position = glm::vec3(0.0f, 5.0f, 15.0f);
+	g_pointLights[0].m_radius = 30.0f;
 	g_pointLights[0].m_diffuse = glm::vec4(0.4f, 0.4f, 0.4f, 1.0f);
 	g_pointLights[0].m_specular = glm::vec4(0.9f, 0.9f, 0.9f, 1.0f);
 
@@ -397,12 +397,6 @@ HRESULT Render(float deltaTime)
 	double coloringTime = 0.0f;
 
 	ID3D11UnorderedAccessView* uav[] = { g_BackBufferUAV, g_rayBuffer->GetUnorderedAccessView(), g_hitBuffer->GetUnorderedAccessView(), g_sphere_buffer->GetUnorderedAccessView(), g_triangleBuffer->GetUnorderedAccessView() };
-	/*
-	ID3D11UnorderedAccessView* uavClear[] = { NULL, NULL, NULL, NULL, NULL, NULL };
-	ID3D11UnorderedAccessView* uavPrimary[] = { g_rayBuffer->GetUnorderedAccessView() };
-	ID3D11UnorderedAccessView* uavIntersection[] = { g_rayBuffer->GetUnorderedAccessView(), g_hitBuffer->GetUnorderedAccessView(), g_sphere_buffer->GetUnorderedAccessView(), g_triangleBuffer->GetUnorderedAccessView() };
-	ID3D11UnorderedAccessView* uavColoring[] = { g_BackBufferUAV, g_hitBuffer->GetUnorderedAccessView(), g_sphere_buffer->GetUnorderedAccessView(), g_triangleBuffer->GetUnorderedAccessView() };
-	*/
 
 	g_DeviceContext->CSSetConstantBuffers(0, 1, &g_cameraBuffer);
 	g_DeviceContext->CSSetConstantBuffers(1, 1, &g_onceBuffer);

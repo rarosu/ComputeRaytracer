@@ -26,22 +26,28 @@ void main( uint3 threadID : SV_DispatchThreadID )
 		color = float4(0.1f, 0.1f, 0.1f, 0.0f) * diffuseM;
 		for (uint i = 0; i < POINT_LIGHT_COUNT; ++i) {
 			PointLight light = c_pointLights[i];
-
 			float3 L = light.m_position - hit.m_position.xyz;
-			float D = saturate(dot(normalize(L), hit.m_normal.xyz));
-			float lightLength = length(L);
-			float f = saturate(sign(light.m_radius - lightLength));
-
-			D = f * lerp(D, 0, lightLength / light.m_radius);
-			color += D * light.m_diffuse * diffuseM;
-
-
-			float3 H = normalize(L + c_cameraPos.xyz);
-			float S = saturate(dot(H, hit.m_normal.xyz));
-			S = pow(S, 50.0f);
 			
-			S = f * lerp(S, 0, lightLength / light.m_radius);
-			color += S * light.m_specular * specularM;		
+			Ray ray;
+			ray.m_origin = hit.m_position;
+			ray.m_direction = float4(normalize(L), 0.0f);
+			HitData shadowHit = ray_vs_scene(ray);
+			if (!shadowHit.m_hit || shadowHit.m_t > length(L)) {
+				float D = saturate(dot(normalize(L), hit.m_normal.xyz));
+				float lightLength = length(L);
+				float f = saturate(sign(light.m_radius - lightLength));
+
+				D = f * lerp(D, 0, lightLength / light.m_radius);
+				color += D * light.m_diffuse * diffuseM;
+
+
+				float3 H = normalize(L + c_cameraPos.xyz);
+				float S = saturate(dot(H, hit.m_normal.xyz));
+				S = pow(S, 50.0f);
+			
+				S = f * lerp(S, 0, lightLength / light.m_radius);
+				color += S * light.m_specular * specularM;		
+			}
 		}
 		
 	}

@@ -92,6 +92,7 @@ RWStructuredBuffer<Tri> g_triangles : register(u4);
 	INTERSECTIONS!
 */
 #define EPSILON 0.000001
+#define DELTA 0.001
 
 HitData ray_vs_sphere(Ray _r, Sphere _s)  {
 	HitData result;
@@ -122,7 +123,7 @@ HitData ray_vs_sphere(Ray _r, Sphere _s)  {
 
 	result.m_hit = true;
 	result.m_primitiveType = PRIMITIVE_TYPE_SPHERE;
-	result.m_position = _r.m_origin + _r.m_direction * (result.m_t - EPSILON);
+	result.m_position = _r.m_origin + _r.m_direction * (result.m_t - DELTA);
 	result.m_normal = float4(normalize(result.m_position.xyz - _s.m_position.xyz), 0.0f);
 
 	return result;
@@ -172,7 +173,7 @@ HitData ray_vs_triangle(Ray _r, Tri _t) {
 
 	result.m_t = t;
 	result.m_hit = true;
-	result.m_position = _r.m_origin + (t - EPSILON) * _r.m_direction;
+	result.m_position = _r.m_origin + (t - DELTA) * _r.m_direction;
 	result.m_normal = _t.m_normal;
 	result.m_primitiveType = PRIMITIVE_TYPE_TRIANGLE;
 	result.m_barycentricCoords = float2(u, v);
@@ -242,7 +243,6 @@ HitData ray_vs_scene(Ray ray) {
 	//Intersection versus triangles.
 	if (ray_vs_aabb(ray)) {
 		for (i = 10; i < num_triangles; ++i) {
-		
 			HitData current_hit = ray_vs_triangle(ray, g_triangles[i]);
 
 			if (current_hit.m_hit && current_hit.m_t < closest_hit.m_t) {
