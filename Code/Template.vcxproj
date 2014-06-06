@@ -208,6 +208,7 @@
     <ClCompile Include="D3D11Timer.cpp" />
     <ClCompile Include="ModelLoader.cpp" />
     <ClCompile Include="TemplateMain.cpp" />
+    <ClCompile Include="tgalib\tga.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Camera.h" />
@@ -216,6 +217,7 @@
     <ClInclude Include="input_state.h" />
     <ClInclude Include="ModelLoader.h" />
     <ClInclude Include="stdafx.h" />
+    <ClInclude Include="tgalib\tga.h" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="..\Bin\Shaders\Coloring.fx">

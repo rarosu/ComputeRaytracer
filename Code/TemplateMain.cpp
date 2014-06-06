@@ -352,7 +352,7 @@ HRESULT Init()
 	g_triangleBuffer = g_ComputeSys->CreateBuffer(STRUCTURED_BUFFER, sizeof(Tri), (UINT)g_triangles.size(), true, true, &g_triangles[0], false, "Triangles");
 	
 	// Create the textures.
-	g_shipTexture = g_ComputeSys->CreateTexture();
+	//g_shipTexture = g_ComputeSys->CreateTexture();
 	
 
 	return S_OK;
