@@ -20,8 +20,6 @@ static const uint PRIMITIVE_TYPE_TRIANGLE = 2;
 
 /**
 	Information about a ray intersection.
-
-	If m_t == -1.0f, the ray has not intersected.
 */
 struct HitData {
 	float m_t;
@@ -34,3 +32,11 @@ struct HitData {
 	// Triangle specific.
 	float2 m_barycentricCoords;
 };
+
+struct PointLight {
+	float3 m_position;
+	float m_radius;
+	float4 m_intensity;
+};
+
+static const uint POINT_LIGHT_COUNT = 1;

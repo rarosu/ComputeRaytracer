@@ -71,6 +71,12 @@ struct HitData {
 	glm::vec2 m_barycentricCoords;
 };
 
+struct PointLight {
+	glm::vec3 m_position;
+	float m_radius;
+	glm::vec4 m_intensity;
+};
+
 //--------------------------------------------------------------------------------------
 // Global Variables
 //--------------------------------------------------------------------------------------
@@ -115,6 +121,7 @@ Camera* g_camera = NULL;
 
 std::vector<sphere> g_spheres;
 std::vector<Tri> g_triangles;
+std::vector<PointLight> g_pointLights;
 
 ComputeShader* g_PrimaryShader = NULL;
 ComputeShader* g_IntersectionShader = NULL;
@@ -130,6 +137,8 @@ ID3D11Buffer* g_cameraBuffer = NULL;
 
 OnceCB* g_onceBufferData = NULL;
 ID3D11Buffer* g_onceBuffer = NULL;
+
+ID3D11Buffer* g_pointLightBuffer = NULL;
 
 
 std::ofstream g_log;
@@ -297,6 +306,11 @@ HRESULT Init()
 	g_triangles[0].m_uv[1] = glm::vec2(1.0f, 1.0f);
 	g_triangles[0].m_uv[2] = glm::vec2(0.0f, 0.0f);
 
+	g_pointLights.resize(1);
+	g_pointLights[0].m_position = glm::vec3(0.0f, 5.0f, 7.5f);
+	g_pointLights[0].m_radius = 15.0f;
+	g_pointLights[0].m_intensity = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+
 	// Create a camera.
 	g_camera = new Camera(Camera::CreatePerspectiveProjection(1.0f, 1000.0f, 45.0f, 1.0f));
 	g_cameraBufferData = new CameraCB;
@@ -307,10 +321,12 @@ HRESULT Init()
 	// Create the buffers.
 	g_cameraBuffer = g_ComputeSys->CreateDynamicBuffer(sizeof(CameraCB), (void*)g_cameraBufferData, "Camera Buffer");
 	g_onceBuffer = g_ComputeSys->CreateDynamicBuffer(sizeof(OnceCB), (void*)g_onceBufferData, "Once Buffer");
+	g_pointLightBuffer = g_ComputeSys->CreateDynamicBuffer(sizeof(PointLight) * g_pointLights.size(), (void*)&g_pointLights[0], "PointLights");
 	g_rayBuffer = g_ComputeSys->CreateBuffer(STRUCTURED_BUFFER, sizeof(Ray), (UINT) WIDTH * HEIGHT, true, true, 0, false, "Ray Buffer");
 	g_hitBuffer = g_ComputeSys->CreateBuffer(STRUCTURED_BUFFER, sizeof(HitData), (UINT) WIDTH * HEIGHT, true, true, 0, false, "Hit Buffer");
 	g_sphere_buffer = g_ComputeSys->CreateBuffer(STRUCTURED_BUFFER, sizeof(sphere), (UINT)g_spheres.size(), true, true, &g_spheres[0], false, "Spheres");
 	g_triangleBuffer = g_ComputeSys->CreateBuffer(STRUCTURED_BUFFER, sizeof(Tri), (UINT)g_triangles.size(), true, true, &g_triangles[0], false, "Triangles");
+	
 	
 	
 
@@ -375,6 +391,7 @@ HRESULT Render(float deltaTime)
 	
 	g_DeviceContext->CSSetConstantBuffers(0, 1, &g_cameraBuffer);
 	g_DeviceContext->CSSetConstantBuffers(1, 1, &g_onceBuffer);
+	g_DeviceContext->CSSetConstantBuffers(2, 1, &g_pointLightBuffer);
 
 
 
