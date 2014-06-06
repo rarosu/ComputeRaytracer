@@ -136,6 +136,8 @@ ComputeBuffer* g_hitBuffer = NULL;
 ComputeBuffer* g_sphere_buffer = NULL;
 ComputeBuffer* g_triangleBuffer = NULL;
 
+ComputeTexture* g_shipTexture = NULL;
+
 CameraCB* g_cameraBufferData = NULL;
 ID3D11Buffer* g_cameraBuffer = NULL;
 
@@ -349,7 +351,8 @@ HRESULT Init()
 	g_sphere_buffer = g_ComputeSys->CreateBuffer(STRUCTURED_BUFFER, sizeof(sphere), (UINT)g_spheres.size(), true, true, &g_spheres[0], false, "Spheres");
 	g_triangleBuffer = g_ComputeSys->CreateBuffer(STRUCTURED_BUFFER, sizeof(Tri), (UINT)g_triangles.size(), true, true, &g_triangles[0], false, "Triangles");
 	
-	
+	// Create the textures.
+	g_shipTexture = g_ComputeSys->CreateTexture();
 	
 
 	return S_OK;
@@ -419,6 +422,7 @@ HRESULT Render(float deltaTime)
 	g_DeviceContext->CSSetConstantBuffers(2, 1, &g_pointLightBuffer);
 	g_DeviceContext->CSSetConstantBuffers(3, 1, &g_aabbBuffer);
 	g_DeviceContext->CSSetConstantBuffers(4, 1, &g_loopCountBuffer);
+	//g_DeviceContext->CSSetShaderResources()
 
 
 	// Primary Ray Stage

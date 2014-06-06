@@ -12,6 +12,7 @@ struct Tri {
 	float4 m_normal;
 	float4 m_corners[3];
 	float2 m_uv[3];
+	uint m_materialIndex;
 };
 
 struct Ray {
@@ -44,6 +45,12 @@ struct PointLight {
 	float m_radius;
 	float4 m_diffuse;
 	float4 m_specular;
+};
+
+struct Material {
+	float4 m_diffuse;
+	float4 m_specular;
+	float m_sharpness;
 };
 
 static const uint POINT_LIGHT_COUNT = 10;
@@ -80,6 +87,10 @@ cbuffer aabbBuffer : register(b3) {
 
 cbuffer per_bounce : register(b4) {
 	uint c_loopCount;
+}
+
+cbuffer materialBuffer : register(b5) {
+	Material c_materials[2];
 }
 
 RWTexture2D<float4> g_output : register(u0);
