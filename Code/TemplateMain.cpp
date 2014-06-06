@@ -79,6 +79,12 @@ struct PointLight {
 	glm::vec4 m_specular;
 };
 
+struct Material {
+	glm::vec4 m_diffuse;
+	glm::vec4 m_specular;
+	float m_sharpness;
+};
+
 //--------------------------------------------------------------------------------------
 // Global Variables
 //--------------------------------------------------------------------------------------
