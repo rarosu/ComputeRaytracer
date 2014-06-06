@@ -145,11 +145,13 @@ ID3D11Buffer* g_aabbBuffer = NULL;
 
 std::ofstream g_log;
 
+float g_t = 0.0f;
+
 //--------------------------------------------------------------------------------------
 // DEMO SPECIFIC FORWARD DECLARATIONS!
 //--------------------------------------------------------------------------------------
 
-void AppendIndoorsBox(std::vector<Tri>& bufferData);
+void UpdatePointLights();
 
 //--------------------------------------------------------------------------------------
 // Forward declarations
@@ -314,11 +316,8 @@ HRESULT Init()
 	LoadModel("../Models/interiorcube.obj", g_triangles, unused);
 	LoadModel("../Models/shipB_OBJ.obj", g_triangles, aabb);
 
-	g_pointLights.resize(1);
-	g_pointLights[0].m_position = glm::vec3(0.0f, 5.0f, 15.0f);
-	g_pointLights[0].m_radius = 30.0f;
-	g_pointLights[0].m_diffuse = glm::vec4(0.4f, 0.4f, 0.4f, 1.0f);
-	g_pointLights[0].m_specular = glm::vec4(0.9f, 0.9f, 0.9f, 1.0f);
+	g_pointLights.resize(10);
+	UpdatePointLights();
 
 	// Create a camera.
 	g_camera = new Camera(Camera::CreatePerspectiveProjection(1.0f, 1000.0f, 45.0f, 1.0f));
@@ -346,6 +345,8 @@ HRESULT Init()
 
 HRESULT Update(float deltaTime)
 {
+	g_t += deltaTime;
+
 	// Handle camera controls
 	POINT center;
 	center.x = (LONG) (g_Width * 0.5f);
@@ -384,6 +385,9 @@ HRESULT Update(float deltaTime)
 	g_cameraBufferData->c_cameraPos = glm::vec4(g_camera->GetPosition(), 1.0f);
 	UpdateBuffer(g_cameraBuffer, g_cameraBufferData, sizeof(CameraCB));
 	
+	UpdatePointLights();
+	UpdateBuffer(g_pointLightBuffer, &g_pointLights[0], sizeof(PointLight) * g_pointLights.size());
+
 	ClientToScreen(g_hWnd, &center);
 	SetCursorPos(center.x, center.y);
 
@@ -606,44 +610,15 @@ HRESULT UpdateBuffer( ID3D11Buffer* p_buffer, void* p_data, unsigned int p_size 
 	return result;
 }
 
-void AppendIndoorsBox( std::vector<Tri>& bufferData )
+void UpdatePointLights()
 {
-	float scale = 50.0f;
-	Tri t;
-
-	/*
-	// Back Face.
-	t.m_corners[0] = scale * glm::vec4(-1.0f, -1.0f, -1.0f, +1.0f);
-	t.m_corners[1] = scale * glm::vec4(+1.0f, -1.0f, -1.0f, +1.0f);
-	t.m_corners[2] = scale * glm::vec4(-1.0f, +1.0f, -1.0f, +1.0f);
-	t.m_uv[0] = glm::vec2(0, 1);
-	t.m_uv[1] = glm::vec2(1, 1);
-	t.m_uv[2] = glm::vec2(0, 0);
-	bufferData.push_back(t);
-
-	t.m_corners[0] = scale * glm::vec4(-1.0f, +1.0f, -1.0f, +1.0f);
-	t.m_corners[1] = scale * glm::vec4(+1.0f, -1.0f, -1.0f, +1.0f);
-	t.m_corners[2] = scale * glm::vec4(+1.0f, +1.0f, -1.0f, +1.0f);
-	t.m_uv[0] = glm::vec2(0, 0);
-	t.m_uv[1] = glm::vec2(1, 1);
-	t.m_uv[2] = glm::vec2(1, 0);
-	bufferData.push_back(t);
-	*/
-
-	// Front Face.
-	t.m_corners[0] = scale * glm::vec4(-1.0f, +1.0f, +1.0f, +1.0f);
-	t.m_corners[1] = scale * glm::vec4(+1.0f, -1.0f, +1.0f, +1.0f);
-	t.m_corners[2] = scale * glm::vec4(-1.0f, -1.0f, +1.0f, +1.0f);
-	t.m_uv[0] = glm::vec2(0, 1);
-	t.m_uv[1] = glm::vec2(1, 1);
-	t.m_uv[2] = glm::vec2(0, 0);
-	bufferData.push_back(t);
-	
-	t.m_corners[0] = scale * glm::vec4(+1.0f, +1.0f, +1.0f, +1.0f);
-	t.m_corners[1] = scale * glm::vec4(+1.0f, -1.0f, +1.0f, +1.0f);
-	t.m_corners[2] = scale * glm::vec4(-1.0f, +1.0f, +1.0f, +1.0f);
-	t.m_uv[0] = glm::vec2(0, 0);
-	t.m_uv[1] = glm::vec2(1, 1);
-	t.m_uv[2] = glm::vec2(1, 0);
-	bufferData.push_back(t);
+	float radius = 30.0f;
+	float angspeed = 1.5f;
+	for (size_t i = 0; i < g_pointLights.size(); ++i) {
+		float angle = i * 2 * 3.141592f / g_pointLights.size() + g_t * angspeed;
+		g_pointLights[i].m_position = radius * glm::vec3(std::cos(angle), 0.0f, std::sin(angle)) + glm::vec3(0.0f, 5.0f, 0.0f);
+		g_pointLights[i].m_radius = radius * 2;
+		g_pointLights[i].m_diffuse = i * glm::vec4(fabs(cos(angle)), fabs(cos(angle)), fabs(sin(angle)), 0.0f) / g_pointLights.size();
+		g_pointLights[i].m_specular = i * glm::vec4(fabs(cos(angle)), fabs(cos(angle)), fabs(sin(angle)), 0.0f) / g_pointLights.size();
+	}
 }

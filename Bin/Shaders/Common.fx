@@ -44,7 +44,7 @@ struct PointLight {
 	float4 m_specular;
 };
 
-static const uint POINT_LIGHT_COUNT = 1;
+static const uint POINT_LIGHT_COUNT = 10;
 
 
 
