@@ -5,6 +5,7 @@ struct Sphere {
 	float4 m_position; // w = radius
 	float4 m_diffuse;
 	float4 m_specular;
+	float m_sharpness;
 };
 
 struct Tri {
@@ -26,6 +27,7 @@ static const uint PRIMITIVE_TYPE_TRIANGLE = 2;
 	Information about a ray intersection.
 */
 struct HitData {
+	float m_previousSharpness;
 	float m_t;
 	bool m_hit;
 	float4 m_position;
@@ -76,11 +78,16 @@ cbuffer aabbBuffer : register(b3) {
 	float4 c_aabbMax;
 };
 
+cbuffer per_bounce : register(b4) {
+	uint c_loopCount;
+}
+
 RWTexture2D<float4> g_output : register(u0);
-RWStructuredBuffer<Ray> g_rays : register(u1);
-RWStructuredBuffer<HitData> g_hits : register(u2);
-RWStructuredBuffer<Sphere> g_spheres : register(u3);
-RWStructuredBuffer<Tri> g_triangles : register(u4);
+RWStructuredBuffer<float4> g_accumulatedOutput : register(u1);
+RWStructuredBuffer<Ray> g_rays : register(u2);
+RWStructuredBuffer<HitData> g_hits : register(u3);
+RWStructuredBuffer<Sphere> g_spheres : register(u4);
+RWStructuredBuffer<Tri> g_triangles : register(u5);
 
 
 

@@ -6,16 +6,24 @@ void main( uint3 threadID : SV_DispatchThreadID )
 	uint index = threadID.y * c_windowWidth + threadID.x;
 	float4 color = float4(0.0f, 0.0f, 0.0f, 1.0f);
 
+	if (c_loopCount == 0) {
+		g_accumulatedOutput[index] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+	}
+
 	HitData hit = g_hits[index];
 	if (hit.m_hit) {
 		float4 diffuseM = float4(0.0f, 0.0f, 0.0f, 1.0f);
 		float4 specularM = float4(0.0f, 0.0f, 0.0f, 1.0f);
+		float sharpnessM = 0.25f;
 		if (hit.m_primitiveType == PRIMITIVE_TYPE_SPHERE) {
 			diffuseM = g_spheres[hit.m_primitiveIndex].m_diffuse;
 			specularM = g_spheres[hit.m_primitiveIndex].m_specular;
+			sharpnessM = g_spheres[hit.m_primitiveIndex].m_sharpness;
 		} else if (hit.m_primitiveType == PRIMITIVE_TYPE_TRIANGLE) {
 			diffuseM = float4(0.0f, 1.0f, 0.0f, 1.0f);
 			specularM = float4(1.0f, 1.0f, 1.0f, 1.0f);
+			//sharpnessM = 0.05f;
+			sharpnessM = 0.25f;
 		}
 
 		// Da phong model yo
@@ -50,8 +58,12 @@ void main( uint3 threadID : SV_DispatchThreadID )
 				color += S * light.m_specular * specularM;
 			}
 		}
-		
-	}
 
-	g_output[threadID.xy] = color;
+		if (c_loopCount > 0)
+			color *= pow(g_hits[index].m_previousSharpness, c_loopCount);
+		g_hits[index].m_previousSharpness = sharpnessM;
+	}
+	//g_accumulatedOutput[index] += color / ((c_loopCount + 1) * (c_loopCount + 1));
+	g_accumulatedOutput[index] += color;
+	g_output[threadID.xy] = g_accumulatedOutput[index];
 }

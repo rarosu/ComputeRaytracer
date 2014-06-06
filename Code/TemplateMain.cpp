@@ -45,6 +45,7 @@ struct sphere {
 	glm::vec4 m_position; // w = radius
 	glm::vec4 m_diffuse;
 	glm::vec4 m_specular;
+	float m_sharpness;
 };
 
 
@@ -59,6 +60,7 @@ const unsigned int PRIMITIVE_TYPE_SPHERE = 1;
 const unsigned int PRIMITIVE_TYPE_TRIANGLE = 2;
 
 struct HitData {
+	float m_previousSharpness;
 	float m_t;
 	bool m_hit;
 	glm::vec4 m_position;
@@ -128,6 +130,7 @@ ComputeShader* g_PrimaryShader = NULL;
 ComputeShader* g_IntersectionShader = NULL;
 ComputeShader* g_ColoringShader = NULL;
 
+ComputeBuffer* g_accumulatedBuffer = NULL;
 ComputeBuffer* g_rayBuffer = NULL;
 ComputeBuffer* g_hitBuffer = NULL;
 ComputeBuffer* g_sphere_buffer = NULL;
@@ -142,10 +145,12 @@ ID3D11Buffer* g_onceBuffer = NULL;
 ID3D11Buffer* g_pointLightBuffer = NULL;
 
 ID3D11Buffer* g_aabbBuffer = NULL;
+ID3D11Buffer* g_loopCountBuffer = NULL;
 
 std::ofstream g_log;
 
 float g_t = 0.0f;
+int g_traceCount = 3;
 
 //--------------------------------------------------------------------------------------
 // DEMO SPECIFIC FORWARD DECLARATIONS!
@@ -307,9 +312,11 @@ HRESULT Init()
 	g_spheres[0].m_position = glm::vec4(0.0f, 0.0f, 10.0f, 3.3f);
 	g_spheres[0].m_diffuse = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
 	g_spheres[0].m_specular = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
+	g_spheres[0].m_sharpness = 0.0f;
 	g_spheres[1].m_position = glm::vec4(0.0f, 0.0f, 5.0f, 1.3f);
 	g_spheres[1].m_diffuse = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
 	g_spheres[1].m_specular = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
+	g_spheres[1].m_sharpness = 0.0f;
 
 	AABB aabb;
 	AABB unused;
@@ -321,6 +328,9 @@ HRESULT Init()
 
 	// Create a camera.
 	g_camera = new Camera(Camera::CreatePerspectiveProjection(1.0f, 1000.0f, 45.0f, 1.0f));
+	g_camera->SetPosition(glm::vec3(+80, 0, 0));
+	g_camera->SetFacing(glm::vec3(-1, 0, 0));
+	g_camera->Commit();
 	g_cameraBufferData = new CameraCB;
 	g_cameraBufferData->c_view = g_camera->GetView();
 	g_cameraBufferData->c_projection = g_camera->GetProjection();
@@ -332,6 +342,8 @@ HRESULT Init()
 	g_onceBuffer = g_ComputeSys->CreateDynamicBuffer(sizeof(OnceCB), (void*)g_onceBufferData, "Once Buffer");
 	g_pointLightBuffer = g_ComputeSys->CreateDynamicBuffer((UINT)(sizeof(PointLight) * g_pointLights.size()), (void*)&g_pointLights[0], "PointLights");
 	g_aabbBuffer = g_ComputeSys->CreateDynamicBuffer(sizeof(AABB), (void*)&aabb, "AABB Buffer");
+	g_loopCountBuffer = g_ComputeSys->CreateDynamicBuffer(sizeof(int), (void*)0, "LoopCount Buffer");
+	g_accumulatedBuffer = g_ComputeSys->CreateBuffer(STRUCTURED_BUFFER, sizeof(glm::vec4), WIDTH * HEIGHT, true, true, 0, false, "Accumulated Buffer");
 	g_rayBuffer = g_ComputeSys->CreateBuffer(STRUCTURED_BUFFER, sizeof(Ray), (UINT) WIDTH * HEIGHT, true, true, 0, false, "Ray Buffer");
 	g_hitBuffer = g_ComputeSys->CreateBuffer(STRUCTURED_BUFFER, sizeof(HitData), (UINT) WIDTH * HEIGHT, true, true, 0, false, "Hit Buffer");
 	g_sphere_buffer = g_ComputeSys->CreateBuffer(STRUCTURED_BUFFER, sizeof(sphere), (UINT)g_spheres.size(), true, true, &g_spheres[0], false, "Spheres");
@@ -400,16 +412,17 @@ HRESULT Render(float deltaTime)
 	double intersectionTime = 0.0f;
 	double coloringTime = 0.0f;
 
-	ID3D11UnorderedAccessView* uav[] = { g_BackBufferUAV, g_rayBuffer->GetUnorderedAccessView(), g_hitBuffer->GetUnorderedAccessView(), g_sphere_buffer->GetUnorderedAccessView(), g_triangleBuffer->GetUnorderedAccessView() };
+	ID3D11UnorderedAccessView* uav[] = { g_BackBufferUAV, g_accumulatedBuffer->GetUnorderedAccessView(), g_rayBuffer->GetUnorderedAccessView(), g_hitBuffer->GetUnorderedAccessView(), g_sphere_buffer->GetUnorderedAccessView(), g_triangleBuffer->GetUnorderedAccessView() };
 
 	g_DeviceContext->CSSetConstantBuffers(0, 1, &g_cameraBuffer);
 	g_DeviceContext->CSSetConstantBuffers(1, 1, &g_onceBuffer);
 	g_DeviceContext->CSSetConstantBuffers(2, 1, &g_pointLightBuffer);
 	g_DeviceContext->CSSetConstantBuffers(3, 1, &g_aabbBuffer);
+	g_DeviceContext->CSSetConstantBuffers(4, 1, &g_loopCountBuffer);
 
 
 	// Primary Ray Stage
-	g_DeviceContext->CSSetUnorderedAccessViews(0, 5, uav, NULL);
+	g_DeviceContext->CSSetUnorderedAccessViews(0, 6, uav, NULL);
 	
 	g_PrimaryShader->Set();
 	g_Timer->Start();
@@ -419,22 +432,25 @@ HRESULT Render(float deltaTime)
 	primaryTime = g_Timer->GetTime();
 
 
-	// Intersection stage
-	g_IntersectionShader->Set();
-	g_Timer->Start();
-	g_DeviceContext->Dispatch(THREAD_GROUPS_X, THREAD_GROUPS_Y, 1);
-	g_Timer->Stop();
-	g_IntersectionShader->Unset();
-	intersectionTime = g_Timer->GetTime();
+	for (int i = 0; i < g_traceCount; ++i) {
+		UpdateBuffer(g_loopCountBuffer, (void*)&i, sizeof(int));
 
-	// Coloring stage
-	g_ColoringShader->Set();
-	g_Timer->Start();
-	g_DeviceContext->Dispatch(THREAD_GROUPS_X, THREAD_GROUPS_Y, 1);
-	g_Timer->Stop();
-	g_ColoringShader->Unset();
-	coloringTime = g_Timer->GetTime();
+		// Intersection stage
+		g_IntersectionShader->Set();
+		g_Timer->Start();
+		g_DeviceContext->Dispatch(THREAD_GROUPS_X, THREAD_GROUPS_Y, 1);
+		g_Timer->Stop();
+		g_IntersectionShader->Unset();
+		intersectionTime = g_Timer->GetTime();
 
+		// Coloring stage
+		g_ColoringShader->Set();
+		g_Timer->Start();
+		g_DeviceContext->Dispatch(THREAD_GROUPS_X, THREAD_GROUPS_Y, 1);
+		g_Timer->Stop();
+		g_ColoringShader->Unset();
+		coloringTime = g_Timer->GetTime();
+	}
 
 	// Presentation! :D
 	if(FAILED(g_SwapChain->Present( 0, 0 )))
@@ -614,11 +630,14 @@ void UpdatePointLights()
 {
 	float radius = 30.0f;
 	float angspeed = 1.5f;
+	float g = 1;
 	for (size_t i = 0; i < g_pointLights.size(); ++i) {
-		float angle = i * 2 * 3.141592f / g_pointLights.size() + g_t * angspeed;
+		float angle = g * (i * 4 * 3.141592f / g_pointLights.size() + g_t * angspeed);
+		g *= -1;
+
 		g_pointLights[i].m_position = radius * glm::vec3(std::cos(angle), 0.0f, std::sin(angle)) + glm::vec3(0.0f, 5.0f, 0.0f);
 		g_pointLights[i].m_radius = radius * 2;
-		g_pointLights[i].m_diffuse = i * glm::vec4(fabs(cos(angle)), fabs(cos(angle)), fabs(sin(angle)), 0.0f) / g_pointLights.size();
-		g_pointLights[i].m_specular = i * glm::vec4(fabs(cos(angle)), fabs(cos(angle)), fabs(sin(angle)), 0.0f) / g_pointLights.size();
+		g_pointLights[i].m_diffuse = i * glm::vec4(fabs(cos(angle)), fabs(cos(angle)), fabs(sin(angle)), 0.0f) / (g_pointLights.size() * 2);
+		g_pointLights[i].m_specular = i * glm::vec4(fabs(cos(angle)), fabs(cos(angle)), fabs(sin(angle)), 0.0f) / (g_pointLights.size() * 2);
 	}
 }
