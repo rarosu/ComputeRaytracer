@@ -5,6 +5,7 @@ struct Sphere {
 };
 
 struct Tri {
+	float4 m_normal;
 	float4 m_corners[3];
 	float2 m_uv[3];
 };

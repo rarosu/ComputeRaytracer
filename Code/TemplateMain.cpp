@@ -12,6 +12,7 @@
 #include "D3D11Timer.h"
 #include "input_state.h"
 #include "Camera.h"
+#include "ModelLoader.h"
 
 /*	DirectXTex library - for usage info, see http://directxtex.codeplex.com/
 	
@@ -45,10 +46,7 @@ struct sphere {
 	glm::vec4 m_color;
 };
 
-struct Tri {
-	glm::vec4 m_corners[3];
-	glm::vec2 m_uv[3];
-};
+
 
 struct Ray {
 	glm::vec4 m_origin;
@@ -140,8 +138,15 @@ ID3D11Buffer* g_onceBuffer = NULL;
 
 ID3D11Buffer* g_pointLightBuffer = NULL;
 
+ID3D11Buffer* g_aabbBuffer = NULL;
 
 std::ofstream g_log;
+
+//--------------------------------------------------------------------------------------
+// DEMO SPECIFIC FORWARD DECLARATIONS!
+//--------------------------------------------------------------------------------------
+
+void AppendIndoorsBox(std::vector<Tri>& bufferData);
 
 //--------------------------------------------------------------------------------------
 // Forward declarations
@@ -280,6 +285,7 @@ HRESULT Init()
 	center.y = (LONG) (g_Height * 0.5f);
 	ClientToScreen(g_hWnd, &center);
 	SetCursorPos(center.x, center.y);
+	ShowCursor(FALSE);
 
 	// Setup the shaders.
 	g_PrimaryShader = g_ComputeSys->CreateComputeShader(_T("../Shaders/Primary.fx"), NULL, "main", NULL);
@@ -305,6 +311,10 @@ HRESULT Init()
 	g_triangles[0].m_uv[0] = glm::vec2(0.0f, 1.0f);
 	g_triangles[0].m_uv[1] = glm::vec2(1.0f, 1.0f);
 	g_triangles[0].m_uv[2] = glm::vec2(0.0f, 0.0f);
+	//AppendIndoorsBox(g_triangles);
+
+	AABB aabb;
+	LoadModel("../Models/shipB_OBJ.obj", g_triangles, aabb);
 
 	g_pointLights.resize(1);
 	g_pointLights[0].m_position = glm::vec3(0.0f, 5.0f, 7.5f);
@@ -321,7 +331,8 @@ HRESULT Init()
 	// Create the buffers.
 	g_cameraBuffer = g_ComputeSys->CreateDynamicBuffer(sizeof(CameraCB), (void*)g_cameraBufferData, "Camera Buffer");
 	g_onceBuffer = g_ComputeSys->CreateDynamicBuffer(sizeof(OnceCB), (void*)g_onceBufferData, "Once Buffer");
-	g_pointLightBuffer = g_ComputeSys->CreateDynamicBuffer(sizeof(PointLight) * g_pointLights.size(), (void*)&g_pointLights[0], "PointLights");
+	g_pointLightBuffer = g_ComputeSys->CreateDynamicBuffer((UINT)(sizeof(PointLight) * g_pointLights.size()), (void*)&g_pointLights[0], "PointLights");
+	g_aabbBuffer = g_ComputeSys->CreateDynamicBuffer(sizeof(AABB), (void*)&aabb, "AABB Buffer");
 	g_rayBuffer = g_ComputeSys->CreateBuffer(STRUCTURED_BUFFER, sizeof(Ray), (UINT) WIDTH * HEIGHT, true, true, 0, false, "Ray Buffer");
 	g_hitBuffer = g_ComputeSys->CreateBuffer(STRUCTURED_BUFFER, sizeof(HitData), (UINT) WIDTH * HEIGHT, true, true, 0, false, "Hit Buffer");
 	g_sphere_buffer = g_ComputeSys->CreateBuffer(STRUCTURED_BUFFER, sizeof(sphere), (UINT)g_spheres.size(), true, true, &g_spheres[0], false, "Spheres");
@@ -392,7 +403,7 @@ HRESULT Render(float deltaTime)
 	g_DeviceContext->CSSetConstantBuffers(0, 1, &g_cameraBuffer);
 	g_DeviceContext->CSSetConstantBuffers(1, 1, &g_onceBuffer);
 	g_DeviceContext->CSSetConstantBuffers(2, 1, &g_pointLightBuffer);
-
+	g_DeviceContext->CSSetConstantBuffers(3, 1, &g_aabbBuffer);
 
 
 	// Primary Ray Stage
@@ -607,4 +618,46 @@ HRESULT UpdateBuffer( ID3D11Buffer* p_buffer, void* p_data, unsigned int p_size 
 	}
 	
 	return result;
+}
+
+void AppendIndoorsBox( std::vector<Tri>& bufferData )
+{
+	float scale = 50.0f;
+	Tri t;
+
+	/*
+	// Back Face.
+	t.m_corners[0] = scale * glm::vec4(-1.0f, -1.0f, -1.0f, +1.0f);
+	t.m_corners[1] = scale * glm::vec4(+1.0f, -1.0f, -1.0f, +1.0f);
+	t.m_corners[2] = scale * glm::vec4(-1.0f, +1.0f, -1.0f, +1.0f);
+	t.m_uv[0] = glm::vec2(0, 1);
+	t.m_uv[1] = glm::vec2(1, 1);
+	t.m_uv[2] = glm::vec2(0, 0);
+	bufferData.push_back(t);
+
+	t.m_corners[0] = scale * glm::vec4(-1.0f, +1.0f, -1.0f, +1.0f);
+	t.m_corners[1] = scale * glm::vec4(+1.0f, -1.0f, -1.0f, +1.0f);
+	t.m_corners[2] = scale * glm::vec4(+1.0f, +1.0f, -1.0f, +1.0f);
+	t.m_uv[0] = glm::vec2(0, 0);
+	t.m_uv[1] = glm::vec2(1, 1);
+	t.m_uv[2] = glm::vec2(1, 0);
+	bufferData.push_back(t);
+	*/
+
+	// Front Face.
+	t.m_corners[0] = scale * glm::vec4(-1.0f, +1.0f, +1.0f, +1.0f);
+	t.m_corners[1] = scale * glm::vec4(+1.0f, -1.0f, +1.0f, +1.0f);
+	t.m_corners[2] = scale * glm::vec4(-1.0f, -1.0f, +1.0f, +1.0f);
+	t.m_uv[0] = glm::vec2(0, 1);
+	t.m_uv[1] = glm::vec2(1, 1);
+	t.m_uv[2] = glm::vec2(0, 0);
+	bufferData.push_back(t);
+	
+	t.m_corners[0] = scale * glm::vec4(+1.0f, +1.0f, +1.0f, +1.0f);
+	t.m_corners[1] = scale * glm::vec4(+1.0f, -1.0f, +1.0f, +1.0f);
+	t.m_corners[2] = scale * glm::vec4(-1.0f, +1.0f, +1.0f, +1.0f);
+	t.m_uv[0] = glm::vec2(0, 0);
+	t.m_uv[1] = glm::vec2(1, 1);
+	t.m_uv[2] = glm::vec2(1, 0);
+	bufferData.push_back(t);
 }

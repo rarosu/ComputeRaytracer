@@ -6,6 +6,11 @@ cbuffer per_once : register(b1) {
 	int c_windowHeight;
 };
 
+cbuffer aabbBuffer : register(b3) {
+	float4 c_aabbMin;
+	float4 c_aabbMax;
+};
+
 RWStructuredBuffer<Ray> g_rayIO : register(u0);
 RWStructuredBuffer<HitData> g_hitOutput : register(u1);
 RWStructuredBuffer<Sphere> g_spheres : register(u2);
@@ -13,6 +18,7 @@ RWStructuredBuffer<Tri> g_triangles : register(u3);
 
 HitData ray_vs_sphere(Ray _r, Sphere _s);
 HitData ray_vs_triangle(Ray _r, Tri _t);
+bool ray_vs_aabb(Ray _r);
 
 [numthreads(32, 32, 1)]
 void main( uint3 threadID : SV_DispatchThreadID )
@@ -53,12 +59,16 @@ void main( uint3 threadID : SV_DispatchThreadID )
 	}
 
 	//Intersection versus triangles.
-	for (i = 0; i < num_triangles; ++i) {
-		HitData current_hit = ray_vs_triangle(ray, g_triangles[i]);
+	if (ray_vs_aabb(ray)) {
+		for (i = 0; i < num_triangles; ++i) {
+		
+			HitData current_hit = ray_vs_triangle(ray, g_triangles[i]);
 
-		if (current_hit.m_hit && current_hit.m_t < closest_hit.m_t) {
-			closest_hit = current_hit;
-			closest_hit.m_primitiveIndex = i;
+			if (current_hit.m_hit && current_hit.m_t < closest_hit.m_t) {
+				closest_hit = current_hit;
+				closest_hit.m_primitiveIndex = i;
+			}
+		
 		}
 	}
 
@@ -152,9 +162,30 @@ HitData ray_vs_triangle(Ray _r, Tri _t) {
 	result.m_t = t;
 	result.m_hit = true;
 	result.m_position = _r.m_origin + (t - EPSILON) * _r.m_direction;
-	result.m_normal = float4(cross(e1, e2), 0.0f);
+	result.m_normal = _t.m_normal;
 	result.m_primitiveType = PRIMITIVE_TYPE_TRIANGLE;
 	result.m_barycentricCoords = float2(u, v);
 
 	return result;
+}
+
+bool ray_vs_aabb(Ray _r) {
+	float3 invdir = 1.0f / _r.m_direction.xyz;
+ 
+    float t1 = (c_aabbMin.x - _r.m_origin.x) * invdir.x;
+    float t2 = (c_aabbMax.x - _r.m_origin.x) * invdir.x;
+    float t3 = (c_aabbMin.y - _r.m_origin.y) * invdir.y;
+    float t4 = (c_aabbMax.y - _r.m_origin.y) * invdir.y;
+    float t5 = (c_aabbMin.z - _r.m_origin.z) * invdir.z;
+    float t6 = (c_aabbMax.z - _r.m_origin.z) * invdir.z;
+
+    float tmin = max(max(min(t1, t2), min(t3, t4)), min(t5, t6));
+    float tmax = min(min(max(t1, t2), max(t3, t4)), max(t5, t6));
+
+    if(tmax < 0)
+    	return false;
+    if(tmin > tmax)
+    	return false;
+
+    return true;
 }

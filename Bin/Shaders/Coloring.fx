@@ -28,10 +28,12 @@ void main( uint3 threadID : SV_DispatchThreadID )
 			color = float4(0.0f, 1.0f, 0.0f, 1.0f);
 		}
 
+		
 		for (uint i = 0; i < POINT_LIGHT_COUNT; ++i) {
 			float3 toLight = normalize(c_pointLights[i].m_position - hit.m_position.xyz);
 			color *= saturate(dot(toLight, hit.m_normal.xyz)) * c_pointLights[i].m_intensity;
 		}
+		
 	}
 
 	output[threadID.xy] = color;
