@@ -1,18 +1,5 @@
 #include "Common.fx"
 
-cbuffer per_frame : register(b0) {
-	float4x4 c_view;
-	float4x4 c_projection;
-	float4x4 c_inv_vp;
-};
-
-cbuffer per_once : register(b1) {
-	int c_windowWidth;
-	int c_windowHeight;
-};
-
-RWStructuredBuffer<Ray> rayOutput : register(u0);
-
 [numthreads(32, 32, 1)]
 void main( uint3 threadID : SV_DispatchThreadID )
 {
@@ -29,5 +16,5 @@ void main( uint3 threadID : SV_DispatchThreadID )
 	ray.m_origin = near;
 	ray.m_direction = normalize(far - near);
 
-	rayOutput[index] = ray;
+	g_rays[index] = ray;
 }

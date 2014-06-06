@@ -43,7 +43,8 @@
 //-------------------------------------------------------------------------------------
 struct sphere {
 	glm::vec4 m_position; // w = radius
-	glm::vec4 m_color;
+	glm::vec4 m_diffuse;
+	glm::vec4 m_specular;
 };
 
 
@@ -72,7 +73,8 @@ struct HitData {
 struct PointLight {
 	glm::vec3 m_position;
 	float m_radius;
-	glm::vec4 m_intensity;
+	glm::vec4 m_diffuse;
+	glm::vec4 m_specular;
 };
 
 //--------------------------------------------------------------------------------------
@@ -106,6 +108,7 @@ struct CameraCB
 	glm::mat4 c_view;
 	glm::mat4 c_projection;
 	glm::mat4 c_inv_vp;
+	glm::vec4 c_cameraPos;
 };
 
 struct OnceCB
@@ -300,26 +303,22 @@ HRESULT Init()
 	// Setup the scene data.
 	g_spheres.resize(2);
 	g_spheres[0].m_position = glm::vec4(0.0f, -5.0f, 10.0f, 3.3f);
-	g_spheres[0].m_color = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
+	g_spheres[0].m_diffuse = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
+	g_spheres[0].m_specular = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
 	g_spheres[1].m_position = glm::vec4(0.0f, 0.0f, 5.0f, 1.3f);
-	g_spheres[1].m_color = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
-
-	g_triangles.resize(1);
-	g_triangles[0].m_corners[0] = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
-	g_triangles[0].m_corners[1] = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
-	g_triangles[0].m_corners[2] = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
-	g_triangles[0].m_uv[0] = glm::vec2(0.0f, 1.0f);
-	g_triangles[0].m_uv[1] = glm::vec2(1.0f, 1.0f);
-	g_triangles[0].m_uv[2] = glm::vec2(0.0f, 0.0f);
-	//AppendIndoorsBox(g_triangles);
+	g_spheres[1].m_diffuse = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
+	g_spheres[1].m_specular = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
 
 	AABB aabb;
+	AABB unused;
+	LoadModel("../Models/interiorcube.obj", g_triangles, unused);
 	LoadModel("../Models/shipB_OBJ.obj", g_triangles, aabb);
 
 	g_pointLights.resize(1);
 	g_pointLights[0].m_position = glm::vec3(0.0f, 5.0f, 7.5f);
-	g_pointLights[0].m_radius = 15.0f;
-	g_pointLights[0].m_intensity = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+	g_pointLights[0].m_radius = 20.0f;
+	g_pointLights[0].m_diffuse = glm::vec4(0.4f, 0.4f, 0.4f, 1.0f);
+	g_pointLights[0].m_specular = glm::vec4(0.9f, 0.9f, 0.9f, 1.0f);
 
 	// Create a camera.
 	g_camera = new Camera(Camera::CreatePerspectiveProjection(1.0f, 1000.0f, 45.0f, 1.0f));
@@ -327,6 +326,7 @@ HRESULT Init()
 	g_cameraBufferData->c_view = g_camera->GetView();
 	g_cameraBufferData->c_projection = g_camera->GetProjection();
 	g_cameraBufferData->c_inv_vp = g_camera->GetInverseViewProjection();
+	g_cameraBufferData->c_cameraPos = glm::vec4(g_camera->GetPosition(), 1.0f);
 
 	// Create the buffers.
 	g_cameraBuffer = g_ComputeSys->CreateDynamicBuffer(sizeof(CameraCB), (void*)g_cameraBufferData, "Camera Buffer");
@@ -381,6 +381,7 @@ HRESULT Update(float deltaTime)
 	g_cameraBufferData->c_view = g_camera->GetView();
 	g_cameraBufferData->c_projection = g_camera->GetProjection();
 	g_cameraBufferData->c_inv_vp = g_camera->GetInverseViewProjection();
+	g_cameraBufferData->c_cameraPos = glm::vec4(g_camera->GetPosition(), 1.0f);
 	UpdateBuffer(g_cameraBuffer, g_cameraBufferData, sizeof(CameraCB));
 	
 	ClientToScreen(g_hWnd, &center);
@@ -395,11 +396,14 @@ HRESULT Render(float deltaTime)
 	double intersectionTime = 0.0f;
 	double coloringTime = 0.0f;
 
+	ID3D11UnorderedAccessView* uav[] = { g_BackBufferUAV, g_rayBuffer->GetUnorderedAccessView(), g_hitBuffer->GetUnorderedAccessView(), g_sphere_buffer->GetUnorderedAccessView(), g_triangleBuffer->GetUnorderedAccessView() };
+	/*
 	ID3D11UnorderedAccessView* uavClear[] = { NULL, NULL, NULL, NULL, NULL, NULL };
 	ID3D11UnorderedAccessView* uavPrimary[] = { g_rayBuffer->GetUnorderedAccessView() };
 	ID3D11UnorderedAccessView* uavIntersection[] = { g_rayBuffer->GetUnorderedAccessView(), g_hitBuffer->GetUnorderedAccessView(), g_sphere_buffer->GetUnorderedAccessView(), g_triangleBuffer->GetUnorderedAccessView() };
 	ID3D11UnorderedAccessView* uavColoring[] = { g_BackBufferUAV, g_hitBuffer->GetUnorderedAccessView(), g_sphere_buffer->GetUnorderedAccessView(), g_triangleBuffer->GetUnorderedAccessView() };
-	
+	*/
+
 	g_DeviceContext->CSSetConstantBuffers(0, 1, &g_cameraBuffer);
 	g_DeviceContext->CSSetConstantBuffers(1, 1, &g_onceBuffer);
 	g_DeviceContext->CSSetConstantBuffers(2, 1, &g_pointLightBuffer);
@@ -407,7 +411,7 @@ HRESULT Render(float deltaTime)
 
 
 	// Primary Ray Stage
-	g_DeviceContext->CSSetUnorderedAccessViews(0, 1, uavPrimary, NULL);
+	g_DeviceContext->CSSetUnorderedAccessViews(0, 5, uav, NULL);
 	
 	g_PrimaryShader->Set();
 	g_Timer->Start();
@@ -416,13 +420,8 @@ HRESULT Render(float deltaTime)
 	g_PrimaryShader->Unset();
 	primaryTime = g_Timer->GetTime();
 
-	g_DeviceContext->CSSetUnorderedAccessViews(0, 1, uavClear, NULL);
-
-
 
 	// Intersection stage
-	g_DeviceContext->CSSetUnorderedAccessViews(0, 4, uavIntersection, NULL);
-
 	g_IntersectionShader->Set();
 	g_Timer->Start();
 	g_DeviceContext->Dispatch(THREAD_GROUPS_X, THREAD_GROUPS_Y, 1);
@@ -430,20 +429,13 @@ HRESULT Render(float deltaTime)
 	g_IntersectionShader->Unset();
 	intersectionTime = g_Timer->GetTime();
 
-	g_DeviceContext->CSSetUnorderedAccessViews(0, 4, uavClear, NULL);
-
 	// Coloring stage
-	g_DeviceContext->CSSetUnorderedAccessViews(0, 4, uavColoring, NULL);
-
 	g_ColoringShader->Set();
 	g_Timer->Start();
 	g_DeviceContext->Dispatch(THREAD_GROUPS_X, THREAD_GROUPS_Y, 1);
 	g_Timer->Stop();
 	g_ColoringShader->Unset();
 	coloringTime = g_Timer->GetTime();
-
-	g_DeviceContext->CSSetUnorderedAccessViews(0, 4, uavClear, NULL);
-
 
 
 	// Presentation! :D
