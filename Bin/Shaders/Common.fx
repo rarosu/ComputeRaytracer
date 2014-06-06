@@ -100,7 +100,7 @@ RWStructuredBuffer<HitData> g_hits : register(u3);
 RWStructuredBuffer<Sphere> g_spheres : register(u4);
 RWStructuredBuffer<Tri> g_triangles : register(u5);
 
-
+Texture2D g_shipDiffuse;
 
 
 

@@ -1,5 +1,12 @@
 #include "Common.fx"
 
+SamplerState TextureSampler
+{
+    Filter = MIN_MAG_MIP_LINEAR;
+    AddressU = Wrap;
+    AddressV = Wrap;
+};
+
 [numthreads(32, 32, 1)]
 void main( uint3 threadID : SV_DispatchThreadID )
 {
@@ -20,10 +27,18 @@ void main( uint3 threadID : SV_DispatchThreadID )
 			specularM = g_spheres[hit.m_primitiveIndex].m_specular;
 			sharpnessM = g_spheres[hit.m_primitiveIndex].m_sharpness;
 		} else if (hit.m_primitiveType == PRIMITIVE_TYPE_TRIANGLE) {
-			diffuseM = float4(0.0f, 1.0f, 0.0f, 1.0f);
+			float bu = hit.m_barycentricCoords.x;
+			float bv = hit.m_barycentricCoords.y;
+			float2 uv = g_triangles[hit.m_primitiveIndex].m_uv[0] * (1 - bu - bv)
+					  + g_triangles[hit.m_primitiveIndex].m_uv[1] * bu
+					  + g_triangles[hit.m_primitiveIndex].m_uv[2] * bv; 
+
+			diffuseM = g_shipDiffuse.SampleLevel(TextureSampler, uv, 0);
+
+			//diffuseM = float4(0.0f, 1.0f, 0.0f, 1.0f);
 			specularM = float4(1.0f, 1.0f, 1.0f, 1.0f);
-			//sharpnessM = 0.05f;
-			sharpnessM = 0.25f;
+			sharpnessM = 0.05f;
+			//sharpnessM = 0.25f;
 		}
 
 		// Da phong model yo

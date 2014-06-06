@@ -13,6 +13,7 @@
 #include "input_state.h"
 #include "Camera.h"
 #include "ModelLoader.h"
+#include "tgalib/tga.h"
 
 /*	DirectXTex library - for usage info, see http://directxtex.codeplex.com/
 	
@@ -142,7 +143,7 @@ ComputeBuffer* g_hitBuffer = NULL;
 ComputeBuffer* g_sphere_buffer = NULL;
 ComputeBuffer* g_triangleBuffer = NULL;
 
-ComputeTexture* g_shipTexture = NULL;
+ComputeTexture* g_shipDiffuse = NULL;
 
 CameraCB* g_cameraBufferData = NULL;
 ID3D11Buffer* g_cameraBuffer = NULL;
@@ -358,8 +359,9 @@ HRESULT Init()
 	g_triangleBuffer = g_ComputeSys->CreateBuffer(STRUCTURED_BUFFER, sizeof(Tri), (UINT)g_triangles.size(), true, true, &g_triangles[0], false, "Triangles");
 	
 	// Create the textures.
-	//g_shipTexture = g_ComputeSys->CreateTexture();
-	
+	tgaInfo* shipDiffuseFile = tgaLoad("../Textures/s_1024_C32.tga");
+	g_shipDiffuse = g_ComputeSys->CreateTexture(DXGI_FORMAT_R8G8B8A8_UNORM, shipDiffuseFile->width, shipDiffuseFile->height, shipDiffuseFile->width * shipDiffuseFile->pixelDepth / 8, shipDiffuseFile->imageData, false, "Ship Texture");
+	tgaDestroy(shipDiffuseFile);
 
 	return S_OK;
 }
@@ -422,13 +424,14 @@ HRESULT Render(float deltaTime)
 	double coloringTime = 0.0f;
 
 	ID3D11UnorderedAccessView* uav[] = { g_BackBufferUAV, g_accumulatedBuffer->GetUnorderedAccessView(), g_rayBuffer->GetUnorderedAccessView(), g_hitBuffer->GetUnorderedAccessView(), g_sphere_buffer->GetUnorderedAccessView(), g_triangleBuffer->GetUnorderedAccessView() };
+	ID3D11ShaderResourceView* srv[] = { g_shipDiffuse->GetResourceView() };
 
 	g_DeviceContext->CSSetConstantBuffers(0, 1, &g_cameraBuffer);
 	g_DeviceContext->CSSetConstantBuffers(1, 1, &g_onceBuffer);
 	g_DeviceContext->CSSetConstantBuffers(2, 1, &g_pointLightBuffer);
 	g_DeviceContext->CSSetConstantBuffers(3, 1, &g_aabbBuffer);
 	g_DeviceContext->CSSetConstantBuffers(4, 1, &g_loopCountBuffer);
-	//g_DeviceContext->CSSetShaderResources()
+	g_DeviceContext->CSSetShaderResources(0, 1, srv);
 
 
 	// Primary Ray Stage
