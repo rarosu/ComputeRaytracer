@@ -7,13 +7,16 @@
 //--------------------------------------------------------------------------------------
 #include "stdafx.h"
 
+#include <string>
 #include <fstream>
+#include <sstream>
 #include "ComputeHelp.h"
 #include "D3D11Timer.h"
 #include "input_state.h"
 #include "Camera.h"
 #include "ModelLoader.h"
 #include "tgalib/tga.h"
+#include <algorithm>
 
 /*	DirectXTex library - for usage info, see http://directxtex.codeplex.com/
 	
@@ -111,6 +114,7 @@ const int WIDTH = 800;
 const int HEIGHT = 800;
 const int THREAD_GROUPS_X = 25;
 const int THREAD_GROUPS_Y = 25;
+const int MEASURING_FRAME_COUNT = 500;
 
 struct CameraCB
 {
@@ -157,15 +161,22 @@ ID3D11Buffer* g_aabbBuffer = NULL;
 ID3D11Buffer* g_loopCountBuffer = NULL;
 
 std::ofstream g_log;
+std::ofstream g_report;
 
 float g_t = 0.0f;
 int g_traceCount = 3;
+
+bool g_measureNow = false;
+std::vector<double> g_primarySamples;
+std::vector<double> g_intersectionSamples;
+std::vector<double> g_coloringSamples;
 
 //--------------------------------------------------------------------------------------
 // DEMO SPECIFIC FORWARD DECLARATIONS!
 //--------------------------------------------------------------------------------------
 
 void UpdatePointLights();
+void WriteResultsToFile();
 
 //--------------------------------------------------------------------------------------
 // Forward declarations
@@ -396,6 +407,13 @@ HRESULT Update(float deltaTime)
 	if (g_current_input.m_keyboard.m_keys['D'])
 		g_camera->SetPosition(g_camera->GetPosition() + g_camera->GetRight() * speed * deltaTime);
 
+	if (g_current_input.m_keyboard.m_keys['M'] && !g_previous_input.m_keyboard.m_keys['M']) {
+		g_measureNow = true;
+		g_primarySamples.clear();
+		g_intersectionSamples.clear();
+		g_coloringSamples.clear();
+	}
+
 	const glm::vec3& position = g_camera->GetPosition();
 	const glm::vec3& facing = g_camera->GetFacing();
 	glm::vec3 right = g_camera->GetRight();
@@ -409,7 +427,7 @@ HRESULT Update(float deltaTime)
 	UpdateBuffer(g_cameraBuffer, g_cameraBufferData, sizeof(CameraCB));
 	
 	UpdatePointLights();
-	UpdateBuffer(g_pointLightBuffer, &g_pointLights[0], sizeof(PointLight) * g_pointLights.size());
+	UpdateBuffer(g_pointLightBuffer, &g_pointLights[0], sizeof(PointLight) * (unsigned int)g_pointLights.size());
 
 	ClientToScreen(g_hWnd, &center);
 	SetCursorPos(center.x, center.y);
@@ -444,7 +462,6 @@ HRESULT Render(float deltaTime)
 	g_PrimaryShader->Unset();
 	primaryTime = g_Timer->GetTime();
 
-
 	for (int i = 0; i < g_traceCount; ++i) {
 		UpdateBuffer(g_loopCountBuffer, (void*)&i, sizeof(int));
 
@@ -454,7 +471,7 @@ HRESULT Render(float deltaTime)
 		g_DeviceContext->Dispatch(THREAD_GROUPS_X, THREAD_GROUPS_Y, 1);
 		g_Timer->Stop();
 		g_IntersectionShader->Unset();
-		intersectionTime = g_Timer->GetTime();
+		intersectionTime += g_Timer->GetTime();
 
 		// Coloring stage
 		g_ColoringShader->Set();
@@ -462,7 +479,7 @@ HRESULT Render(float deltaTime)
 		g_DeviceContext->Dispatch(THREAD_GROUPS_X, THREAD_GROUPS_Y, 1);
 		g_Timer->Stop();
 		g_ColoringShader->Unset();
-		coloringTime = g_Timer->GetTime();
+		coloringTime += g_Timer->GetTime();
 	}
 
 	// Presentation! :D
@@ -471,12 +488,42 @@ HRESULT Render(float deltaTime)
 
 
 	char title[256];
-	sprintf_s(
-		title,
-		sizeof(title),
-		"BTH - DirectCompute DEMO - Dispatch time: %f",
-		(primaryTime + intersectionTime + coloringTime)
-	);
+	if (g_measureNow)
+	{
+		sprintf_s(
+			title,
+			sizeof(title),
+			"Dispatch time: Primary: %f, Intersection: %f, Coloring: %f, MEASURING FRAME: %u",
+			primaryTime,
+			intersectionTime,
+			coloringTime,
+			g_primarySamples.size()
+			);
+	}
+	else
+	{
+		sprintf_s(
+			title,
+			sizeof(title),
+			"Dispatch time: Primary: %f, Intersection: %f, Coloring: %f",
+			primaryTime,
+			intersectionTime,
+			coloringTime
+			);
+	}
+	
+
+	if (g_measureNow && primaryTime > 0.0f && intersectionTime > 0.0f && coloringTime > 0.0f) {
+		g_primarySamples.push_back(primaryTime);
+		g_intersectionSamples.push_back(intersectionTime);
+		g_coloringSamples.push_back(coloringTime);
+
+		if (g_primarySamples.size() >= MEASURING_FRAME_COUNT) {
+			g_measureNow = false;
+			WriteResultsToFile();
+
+		}
+	}
 	SetWindowTextA(g_hWnd, title);
 
 	return S_OK;
@@ -650,7 +697,67 @@ void UpdatePointLights()
 
 		g_pointLights[i].m_position = radius * glm::vec3(std::cos(angle), 0.0f, std::sin(angle)) + glm::vec3(0.0f, 5.0f, 0.0f);
 		g_pointLights[i].m_radius = radius * 2;
-		g_pointLights[i].m_diffuse = i * glm::vec4(fabs(cos(angle)), fabs(cos(angle)), fabs(sin(angle)), 0.0f) / (g_pointLights.size() * 2);
-		g_pointLights[i].m_specular = i * glm::vec4(fabs(cos(angle)), fabs(cos(angle)), fabs(sin(angle)), 0.0f) / (g_pointLights.size() * 2);
+		g_pointLights[i].m_diffuse = (float)i * glm::vec4(fabs(cos(angle)), fabs(cos(angle)), fabs(sin(angle)), 0.0f) / ((float)g_pointLights.size() * 2.0f);
+		g_pointLights[i].m_specular = (float)i * glm::vec4(fabs(cos(angle)), fabs(cos(angle)), fabs(sin(angle)), 0.0f) / ((float)g_pointLights.size() * 2.0f);
 	}
+}
+
+void WriteResultsToFile()
+{
+	std::string filename;
+	std::stringstream ss;
+	ss << g_Width << "x" << (g_Width / THREAD_GROUPS_X) << "x" << g_traceCount << "x" << g_pointLights.size() << "x" << g_triangles.size();
+	g_report.open(ss.str().c_str(), std::ios_base::trunc | std::ios_base::out);
+
+	std::sort(g_primarySamples.begin(), g_primarySamples.end());
+	std::sort(g_intersectionSamples.begin(), g_intersectionSamples.end());
+	std::sort(g_coloringSamples.begin(), g_coloringSamples.end());
+
+	g_report << "\n\n\n==== MEASUREMENT DATA START ====" << std::endl;
+	g_report << "Width: " << g_Width << ", Height: " << g_Height << std::endl;
+	g_report << "Thread Group Count X: " << THREAD_GROUPS_X << ", Thread Group Count Y: " << THREAD_GROUPS_Y << std::endl;
+	g_report << "Threads Per Group X: " << (g_Width / float(THREAD_GROUPS_X)) << ", Threads Per Group Y: " << (g_Height / float(THREAD_GROUPS_Y)) << std::endl;
+	g_report << "Trace Depth: " << g_traceCount << std::endl;
+	g_report << "Light Source Count: " << g_pointLights.size() << std::endl;
+	g_report << "Triangle Count: " << g_triangles.size() << std::endl;
+	g_report << "\n\n" << std::endl;
+
+	g_report << "[STAGE] [MEAN] [MAX] [MEDIAN]" << std::endl;
+
+	double mean, max, median;
+	mean = max = median = 0.0;
+
+	// Process primary samples
+	for (int i = 0; i < g_primarySamples.size(); ++i)
+		mean += g_primarySamples[i];
+
+	mean /= g_primarySamples.size();
+	max = g_primarySamples.back();
+	median = (g_primarySamples[(g_primarySamples.size() / 2) - 1] + g_primarySamples[(g_primarySamples.size() / 2)]) * 0.5;
+
+	g_report << "PRIMARY " << mean << " " << max << " " << median << std::endl;
+
+	// Process intersection samples
+	for (int i = 0; i < g_intersectionSamples.size(); ++i)
+		mean += g_intersectionSamples[i];
+
+	mean /= g_intersectionSamples.size();
+	max = g_intersectionSamples.back();
+	median = (g_intersectionSamples[(g_intersectionSamples.size() / 2) - 1] + g_intersectionSamples[(g_intersectionSamples.size() / 2)]) * 0.5;
+
+	g_report << "INTERSECTION " << mean << " " << max << " " << median << std::endl;
+
+	// Process coloring samples
+	for (int i = 0; i < g_coloringSamples.size(); ++i)
+		mean += g_coloringSamples[i];
+
+	mean /= g_coloringSamples.size();
+	max = g_coloringSamples.back();
+	median = (g_coloringSamples[(g_coloringSamples.size() / 2) - 1] + g_coloringSamples[(g_coloringSamples.size() / 2)]) * 0.5;
+
+	g_report << "COLORING " << mean << " " << max << " " << median << std::endl;
+
+	g_report << "\n\n\n==== MEASUREMENT DATA END ====\n\n" << std::endl;
+
+	g_report.close();
 }
