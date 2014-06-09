@@ -7,7 +7,7 @@ SamplerState TextureSampler
     AddressV = Wrap;
 };
 
-[numthreads(32, 32, 1)]
+[numthreads(THREAD_GROUPS, THREAD_GROUPS, 1)]
 void main( uint3 threadID : SV_DispatchThreadID )
 {
 	uint index = threadID.y * c_windowWidth + threadID.x;
@@ -37,8 +37,8 @@ void main( uint3 threadID : SV_DispatchThreadID )
 
 			//diffuseM = float4(0.0f, 1.0f, 0.0f, 1.0f);
 			specularM = float4(1.0f, 1.0f, 1.0f, 1.0f);
-			sharpnessM = 0.05f;
-			//sharpnessM = 0.25f;
+			//sharpnessM = 0.05f;
+			sharpnessM = 0.25f;
 		}
 
 		// Da phong model yo

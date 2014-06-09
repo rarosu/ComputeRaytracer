@@ -1,3 +1,6 @@
+#define THREAD_GROUPS 32
+static const uint POINT_LIGHT_COUNT = 10;
+
 /**
 	STRUCTURES!
 */
@@ -53,7 +56,7 @@ struct Material {
 	float m_sharpness;
 };
 
-static const uint POINT_LIGHT_COUNT = 10;
+
 
 
 
@@ -77,7 +80,7 @@ cbuffer per_once : register(b1) {
 };
 
 cbuffer pointLights: register(b2) {
-	PointLight c_pointLights[10];
+	PointLight c_pointLights[POINT_LIGHT_COUNT];
 };
 
 cbuffer aabbBuffer : register(b3) {

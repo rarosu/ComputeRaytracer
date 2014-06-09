@@ -110,11 +110,13 @@ int g_Width, g_Height;
 //--------------------------------------------------------------------------------------
 // DEMO SPECIFIC GLOBALS!
 //--------------------------------------------------------------------------------------
-const int WIDTH = 800;
-const int HEIGHT = 800;
-const int THREAD_GROUPS_X = 25;
-const int THREAD_GROUPS_Y = 25;
+const int WIDTH = 1024;
+const int HEIGHT = 1024;
+const int THREAD_GROUPS_X = 32;
+const int THREAD_GROUPS_Y = 32;
 const int MEASURING_FRAME_COUNT = 500;
+const int LIGHT_COUNT = 10;
+const float TRIANGLE_COUNT_FACTOR = 0.125f;
 
 struct CameraCB
 {
@@ -164,7 +166,8 @@ std::ofstream g_log;
 std::ofstream g_report;
 
 float g_t = 0.0f;
-int g_traceCount = 3;
+int g_traceCount = 1;
+
 
 bool g_measureNow = false;
 std::vector<double> g_primarySamples;
@@ -332,24 +335,24 @@ HRESULT Init()
 	g_spheres[0].m_position = glm::vec4(0.0f, 0.0f, 10.0f, 3.3f);
 	g_spheres[0].m_diffuse = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
 	g_spheres[0].m_specular = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
-	g_spheres[0].m_sharpness = 0.0f;
+	g_spheres[0].m_sharpness = 0.20f;
 	g_spheres[1].m_position = glm::vec4(0.0f, 0.0f, 5.0f, 1.3f);
 	g_spheres[1].m_diffuse = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
 	g_spheres[1].m_specular = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
-	g_spheres[1].m_sharpness = 0.0f;
+	g_spheres[1].m_sharpness = 0.20f;
 
 	AABB aabb;
 	AABB unused;
 	LoadModel("../Models/interiorcube.obj", g_triangles, unused);
 	LoadModel("../Models/shipB_OBJ.obj", g_triangles, aabb);
 
-	g_pointLights.resize(10);
+	g_pointLights.resize(LIGHT_COUNT);
 	UpdatePointLights();
 
 	// Create a camera.
 	g_camera = new Camera(Camera::CreatePerspectiveProjection(1.0f, 1000.0f, 45.0f, 1.0f));
-	g_camera->SetPosition(glm::vec3(+80, 0, 0));
-	g_camera->SetFacing(glm::vec3(-1, 0, 0));
+	g_camera->SetPosition(glm::vec3(+50, 0, 0));
+	g_camera->SetFacing(glm::vec3(-1, 0.0f, 0.0f));
 	g_camera->Commit();
 	g_cameraBufferData = new CameraCB;
 	g_cameraBufferData->c_view = g_camera->GetView();
@@ -367,7 +370,7 @@ HRESULT Init()
 	g_rayBuffer = g_ComputeSys->CreateBuffer(STRUCTURED_BUFFER, sizeof(Ray), (UINT) WIDTH * HEIGHT, true, true, 0, false, "Ray Buffer");
 	g_hitBuffer = g_ComputeSys->CreateBuffer(STRUCTURED_BUFFER, sizeof(HitData), (UINT) WIDTH * HEIGHT, true, true, 0, false, "Hit Buffer");
 	g_sphere_buffer = g_ComputeSys->CreateBuffer(STRUCTURED_BUFFER, sizeof(sphere), (UINT)g_spheres.size(), true, true, &g_spheres[0], false, "Spheres");
-	g_triangleBuffer = g_ComputeSys->CreateBuffer(STRUCTURED_BUFFER, sizeof(Tri), (UINT)g_triangles.size(), true, true, &g_triangles[0], false, "Triangles");
+	g_triangleBuffer = g_ComputeSys->CreateBuffer(STRUCTURED_BUFFER, sizeof(Tri), (UINT)(g_triangles.size() * TRIANGLE_COUNT_FACTOR), true, true, &g_triangles[0], false, "Triangles");
 	
 	// Create the textures.
 	tgaInfo* shipDiffuseFile = tgaLoad("../Textures/s_1024_C32.tga");
@@ -458,6 +461,7 @@ HRESULT Render(float deltaTime)
 	g_PrimaryShader->Set();
 	g_Timer->Start();
 	g_DeviceContext->Dispatch(THREAD_GROUPS_X, THREAD_GROUPS_Y, 1);
+	g_DeviceContext->Flush();
 	g_Timer->Stop();
 	g_PrimaryShader->Unset();
 	primaryTime = g_Timer->GetTime();
@@ -469,6 +473,7 @@ HRESULT Render(float deltaTime)
 		g_IntersectionShader->Set();
 		g_Timer->Start();
 		g_DeviceContext->Dispatch(THREAD_GROUPS_X, THREAD_GROUPS_Y, 1);
+		g_DeviceContext->Flush();
 		g_Timer->Stop();
 		g_IntersectionShader->Unset();
 		intersectionTime += g_Timer->GetTime();
@@ -477,6 +482,7 @@ HRESULT Render(float deltaTime)
 		g_ColoringShader->Set();
 		g_Timer->Start();
 		g_DeviceContext->Dispatch(THREAD_GROUPS_X, THREAD_GROUPS_Y, 1);
+		g_DeviceContext->Flush();
 		g_Timer->Stop();
 		g_ColoringShader->Unset();
 		coloringTime += g_Timer->GetTime();
@@ -493,10 +499,7 @@ HRESULT Render(float deltaTime)
 		sprintf_s(
 			title,
 			sizeof(title),
-			"Dispatch time: Primary: %f, Intersection: %f, Coloring: %f, MEASURING FRAME: %u",
-			primaryTime,
-			intersectionTime,
-			coloringTime,
+			"FRAME: %u",
 			g_primarySamples.size()
 			);
 	}
@@ -607,8 +610,8 @@ HRESULT InitWindow( HINSTANCE hInstance, int nCmdShow )
 							_T("BTH_D3D_Template"),
 							_T("BTH - Direct3D 11.0 Template"),
 							WS_OVERLAPPEDWINDOW,
-							CW_USEDEFAULT,
-							CW_USEDEFAULT,
+							0,//CW_USEDEFAULT,
+							0,//CW_USEDEFAULT,
 							rc.right - rc.left,
 							rc.bottom - rc.top,
 							NULL,
@@ -697,8 +700,8 @@ void UpdatePointLights()
 
 		g_pointLights[i].m_position = radius * glm::vec3(std::cos(angle), 0.0f, std::sin(angle)) + glm::vec3(0.0f, 5.0f, 0.0f);
 		g_pointLights[i].m_radius = radius * 2;
-		g_pointLights[i].m_diffuse = (float)i * glm::vec4(fabs(cos(angle)), fabs(cos(angle)), fabs(sin(angle)), 0.0f) / ((float)g_pointLights.size() * 2.0f);
-		g_pointLights[i].m_specular = (float)i * glm::vec4(fabs(cos(angle)), fabs(cos(angle)), fabs(sin(angle)), 0.0f) / ((float)g_pointLights.size() * 2.0f);
+		g_pointLights[i].m_diffuse = (float)(g_pointLights.size() - i) * glm::vec4(fabs(cos(angle)), fabs(cos(angle)), fabs(sin(angle)), 0.0f) / ((float)g_pointLights.size() * 2.0f);
+		g_pointLights[i].m_specular = (float)(g_pointLights.size() - i) * glm::vec4(fabs(cos(angle)), fabs(cos(angle)), fabs(sin(angle)), 0.0f) / ((float)g_pointLights.size() * 2.0f);
 	}
 }
 
@@ -706,7 +709,7 @@ void WriteResultsToFile()
 {
 	std::string filename;
 	std::stringstream ss;
-	ss << g_Width << "x" << (g_Width / THREAD_GROUPS_X) << "x" << g_traceCount << "x" << g_pointLights.size() << "x" << g_triangles.size();
+	ss << g_Width << "x" << (g_Width / THREAD_GROUPS_X) << "x" << g_traceCount << "x" << g_pointLights.size() << "x" << (size_t)(g_triangles.size() * TRIANGLE_COUNT_FACTOR) << ".txt";
 	g_report.open(ss.str().c_str(), std::ios_base::trunc | std::ios_base::out);
 
 	std::sort(g_primarySamples.begin(), g_primarySamples.end());
@@ -719,7 +722,7 @@ void WriteResultsToFile()
 	g_report << "Threads Per Group X: " << (g_Width / float(THREAD_GROUPS_X)) << ", Threads Per Group Y: " << (g_Height / float(THREAD_GROUPS_Y)) << std::endl;
 	g_report << "Trace Depth: " << g_traceCount << std::endl;
 	g_report << "Light Source Count: " << g_pointLights.size() << std::endl;
-	g_report << "Triangle Count: " << g_triangles.size() << std::endl;
+	g_report << "Triangle Count: " << (size_t)(g_triangles.size() * TRIANGLE_COUNT_FACTOR) << std::endl;
 	g_report << "\n\n" << std::endl;
 
 	g_report << "[STAGE] [MEAN] [MAX] [MEDIAN]" << std::endl;

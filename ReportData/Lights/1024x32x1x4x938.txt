@@ -1,0 +1,23 @@
+
+
+
+==== MEASUREMENT DATA START ====
+Width: 1024, Height: 1024
+Thread Group Count X: 32, Thread Group Count Y: 32
+Threads Per Group X: 32, Threads Per Group Y: 32
+Trace Depth: 1
+Light Source Count: 4
+Triangle Count: 938
+
+
+
+[STAGE] [MEAN] [MAX] [MEDIAN]
+PRIMARY 0.736944 1.6183 0.733376
+INTERSECTION 8.50932 9.20925 8.31786
+COLORING 19.2934 34.1735 17.2425
+
+
+
+==== MEASUREMENT DATA END ====
+
+
